@@ -1,0 +1,54 @@
+---
+title: Serving modes
+description: off, shadow and serve - how the LiteLLM plugin decides who answers a call, when it defers to the cloud model, and how rollback works.
+icon: CloudArrowUp
+---
+
+A served task keeps its LiteLLM name, so callers change nothing. The name points at the ModelStill plugin, and the old cloud deployment moves to `<task>-cloud`. A deployment file sets the mode.
+
+| Mode | Who answers | What is logged |
+|---|---|---|
+| `off` | the cloud model, every call | the prompt and the cloud answer |
+| `shadow` | the cloud model; a `shadow_sample` share is also sent to the student in the background | both answers |
+| `serve` | the student, when it is the deployed model and its confidence is at least `threshold`; otherwise the cloud model | both answers whenever both exist |
+
+## Deferral
+
+In `serve` mode the plugin defers to the cloud model and records why:
+
+| Reason | Meaning |
+|---|---|
+| `low_confidence` | the student's confidence is below the threshold |
+| `model_mismatch` | the student server reported another model than `student_model` |
+| `student_error` | the student call failed |
+| `no_threshold` | the deployment has no threshold, so everything defers |
+| `no_confidence` | the student returned no log-probs to compute confidence from |
+
+Confidence is `exp_mean_logprob` by default: exp of the mean token log-prob of the answer. `min_token_prob` looks at the least sure token instead. The threshold is calibrated on a calibration split for a target error rate with `modelstill serve calibrate`.
+
+Deferred answers are training data: both answers are kept.
+
+## Rollout
+
+Go `off`, then `shadow`, then `serve`. Read the shadow traffic before serving. A student is served only after its gate passes.
+
+## Rollback
+
+Set the mode to `off` where the plugin takes it from (see below): the MCP tool `set_deployment_mode` with `mode: "off"`, `PUT /v1/tasks/{slug}/deployment`, or `mode: off` in the deployment file (quoted or not, both read as `off`). The plugin re-reads its source every `reload_seconds` (30 by default), and every call goes back to the cloud. A broken file or a bad API reply keeps the last good deployment. To roll back to an older student instead, set the student model to its versioned name.
+
+The endpoint watchdog can do this for you: `modelstill watch check --fallback-deployment deployment.yaml` writes `mode: off` to the file when a check is critical, and also sets the API record off when the command is connected to the API.
+
+## Where the plugin takes the mode from
+
+Each task has a deployment file on the proxy host. When the plugin config names the API (an `api` block with its URL and a token), the plugin also reads the task's API deployment record on the same interval. The API record wins whenever the API answers:
+
+| API | Deployment served |
+|---|---|
+| not configured | the file |
+| answers with a record for the task | the record (mode, threshold, shadow sample, and student model, falling back to the file's) |
+| answers with no record | the file |
+| unreachable or returns something invalid | the last good deployment; a file edit made during the outage applies |
+
+So with the API configured you change the mode from the MCP tool, the API or the dashboard, with no file edit or restart. The file is the bootstrap and the fallback during an outage. Once the API answers again its record wins, so repeat an outage-time file change there. Every change gives the next calls a new `deployment_id` in `serving_events`, and the plugin's health shows the source and any error.
+
+See [Serve with the LiteLLM plugin](/guides/serve-with-litellm) for the configuration.

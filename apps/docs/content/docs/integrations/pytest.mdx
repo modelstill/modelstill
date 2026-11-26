@@ -1,0 +1,50 @@
+---
+title: pytest plugin
+description: Record a pytest session as an eval run with intervals, and gate it against the accepted baseline.
+icon: Flask
+---
+
+The plugin ships with the `pytest` extra and registers itself through the `pytest11` entry point. It does nothing until you pass `--modelstill-history`.
+
+## Mark your tests
+
+```python title="test_extract.py"
+import pytest
+
+
+@pytest.mark.modelstill_cases("golden.jsonl")
+def test_extracts_tools(case, modelstill_score):
+    answer = extract(case.input)
+    modelstill_score.record(1.0 if answer == case.expected else 0.0, output=answer)
+
+
+@pytest.mark.modelstill
+def test_refuses_empty_input():
+    assert extract("") == []
+```
+
+- `@pytest.mark.modelstill_cases(path, argname="case")` runs the test once per benchmark case. The path is relative to the test file, then to the rootdir. The case id is the benchmark id.
+- `@pytest.mark.modelstill` marks a plain test as a case. Its id is the test node id, and a pass scores 1.
+- The `modelstill_score` fixture records a score from 0 to 1, the output and any named metrics. A test that fails scores 0, whatever it recorded. To keep graded cases from failing the session, record a score instead of asserting.
+- Each case's latency is its call duration.
+
+## Record and gate
+
+```bash title="Terminal"
+pytest --modelstill-history runs.jsonl --modelstill-task ticket-priority --modelstill-model gpt-5-mini
+modelstill eval accept runs.jsonl <run>
+pytest --modelstill-history runs.jsonl --modelstill-task ticket-priority --modelstill-model candidate \
+  --modelstill-gate tasks/ticket-priority/spec.yaml --modelstill-flip-rate 0 --modelstill-cost-ratio 1
+```
+
+| Option | Meaning |
+|---|---|
+| `--modelstill-history` | the history file to append the run to |
+| `--modelstill-task` | the benchmark name (default the rootdir name) |
+| `--modelstill-model` | the model name to record |
+| `--modelstill-gate` | a task spec or gate YAML; gate the run against the accepted baseline |
+| `--modelstill-flip-rate`, `--modelstill-cost-ratio` | required with `--modelstill-gate`, because tests do not measure them |
+| `--modelstill-p95-latency-ms` | default: measured per test |
+| `--modelstill-primary-metric` | a named metric to gate on |
+
+At the end of the session the plugin records one run and prints it under a `modelstill` section. A failed gate, or a regression gate with no baseline, makes the session exit 1.

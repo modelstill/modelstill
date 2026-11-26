@@ -1,0 +1,23 @@
+name: Bug report
+description: Something in ModelStill does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command or page, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The smallest spec, dataset or command that shows it. Remove any secrets or customer data.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The package version (`uv pip show modelstill`) or the commit SHA.

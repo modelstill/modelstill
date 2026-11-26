@@ -1,0 +1,20 @@
+---
+title: Training runs
+description: Create and update training runs, record their metrics by step, and read them back as series.
+icon: GraduationCap
+full: true
+_openapi:
+  preload:
+    - ./openapi.json
+---
+
+export default function Layout(props) {
+  const { APIPage, OpenAPIPage } = props.components ?? {};
+  const Comp = OpenAPIPage ?? APIPage;
+  return (
+    <>
+      {props.children}
+      <Comp document="./openapi.json" operations={[{ path: "/v1/tasks/{slug}/train-runs", method: "get" }, { path: "/v1/tasks/{slug}/train-runs/{key}", method: "put" }, { path: "/v1/train-runs/{key}", method: "get" }, { path: "/v1/train-runs/{key}/metrics", method: "post" }]} />
+    </>
+  );
+}

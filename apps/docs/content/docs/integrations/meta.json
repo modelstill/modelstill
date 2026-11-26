@@ -1,0 +1,13 @@
+{
+  "title": "Integrations",
+  "icon": "PlugsConnected",
+  "pages": [
+    "litellm",
+    "pytest",
+    "github-action",
+    "langfuse",
+    "braintrust",
+    "opentelemetry",
+    "eval-tools"
+  ]
+}

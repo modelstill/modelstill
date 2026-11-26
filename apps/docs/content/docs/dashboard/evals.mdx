@@ -1,0 +1,34 @@
+---
+title: Evals and run pages
+description: The eval runs list, a run's page with its case table and histograms, and how runs get there.
+icon: ListChecks
+---
+
+## Eval runs
+
+**Evals** lists every pushed run of the task, newest first: created, model, split, judge, score and number of cases. Scores are means with their 95% intervals. Tick two runs and press **Compare** to pair them case by case, or use **Compare latest two**.
+
+Runs get there with `modelstill push run`:
+
+```bash title="Terminal"
+modelstill push run history.jsonl <run-id> --task <task> --primary-metric <metric>
+```
+
+| Flag | Meaning |
+|---|---|
+| `--primary-metric` | a named metric the dashboard shows as the run's score |
+| `--split` | `train`, `val`, `calib` or `gold` (default `gold`) |
+| `--judge-model` | the judge that scored the run |
+| `--no-content` | send only case hashes, scores and per-case metrics, no inputs, expected answers or outputs |
+
+By default each case's input, expected answer, output and per-case metrics are sent. Use `--no-content` for sensitive data. When a task has no runs, the page shows scorer templates to start from (see [Write a scorer](/guides/write-a-scorer)).
+
+## A run's page
+
+Open a run to see:
+
+- the score with its 95% interval, the number of cases and up to two more metrics;
+- **Distributions**: a histogram of the case score and of every metric each case logged;
+- **Cases**, lowest score first: input, output, expected answer and each score. Click a case for its full input, output, expected answer and a line diff.
+
+**Compare with the previous run** opens the [Compare](/dashboard/compare) page against the run before it.

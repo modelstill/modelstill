@@ -1,0 +1,5 @@
+task: technographics
+mode: "off"
+student_model: technographics-v1-s1
+threshold: null
+shadow_sample: 0.1

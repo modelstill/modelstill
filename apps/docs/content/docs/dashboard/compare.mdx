@@ -1,0 +1,27 @@
+---
+title: Compare
+description: Pair two eval runs case by case - the paired difference with its interval, per-metric verdicts, fixed and broken cases, and sending broken cases to review.
+icon: ArrowsLeftRight
+---
+
+The Compare page pairs two runs of the same task on the cases both scored. Its URL is `/tasks/<task>/evals/compare?before=<run>&after=<run>`. Add `&metric=<name>&change=improved` or `&change=regressed` to open it filtered.
+
+## What it shows
+
+- **The headline:** the mean of after minus before, with a seeded percentile bootstrap 95% interval, and the verdict. The interval sets the verdict, never the mean alone: **better** when the interval is above zero, **worse** when it is below, otherwise **no detectable difference**.
+- **Metrics:** every named metric with both runs' values, the difference, how many cases improved and regressed, and a verdict. A metric both runs logged per case gets a paired interval; one with only run-level values shows a difference with no interval.
+- **Cases:** filter by **Broken**, **Fixed** or **Unchanged**, side by side or stacked, sorted by the change, worst first. Select a case to see its input, expected answer and both outputs with their scores.
+
+An exact two-sided sign test of fixed against broken cases is in the API response (`signTest.pValue`). Unchanged cases do not count.
+
+## Send cases to review
+
+**Send N broken to review** queues every broken case in the [review queue](/dashboard/review). You can also tick rows, or send one case from its panel.
+
+## From the CLI
+
+```bash title="Terminal"
+modelstill eval compare history.jsonl <before> <after>
+```
+
+prints the same verdict, difference, interval and fixed and broken counts from your local history. Both runs must have scored the same cases; otherwise the API answers `400 different_cases` and the CLI refuses.

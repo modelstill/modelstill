@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: { app: api }
+  template:
+    metadata:
+      labels: { app: api }
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      imagePullSecrets: [{ name: ghcr }]
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: api
+          image: modelstill-api
+          envFrom:
+            - secretRef: { name: modelstill-env }
+          env:
+            - { name: PORT, value: "8787" }
+            - { name: NODE_ENV, value: production }
+            - { name: CORS_ORIGINS, value: "https://app.modelstill.com" }
+            - { name: BETTER_AUTH_URL, value: "https://api.modelstill.com" }
+          ports:
+            - { name: http, containerPort: 8787 }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  selector: { app: api }
+  ports:
+    - { name: http, port: 8787, targetPort: http }

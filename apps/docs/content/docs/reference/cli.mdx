@@ -1,0 +1,214 @@
+---
+title: CLI reference
+description: Every modelstill command, its arguments and flags, and its exit codes.
+icon: Terminal
+---
+
+`modelstill` is installed with the Python package. Run `modelstill <group> --help` for the same list.
+
+| Group | What it does |
+|---|---|
+| [`spec`](#spec) | validate and hash task specs |
+| [`eval`](#eval) | read and compare recorded runs |
+| [`push`](#push) | send specs, runs, gates, review items and train runs to the API |
+| [`report`](#report) | render gate decisions for pull requests |
+| [`quickstart`](#quickstart) | write an example task and run history to see the gate offline |
+| [`setup`](#setup) | print or hand your coding agent the setup prompt |
+| [`swap`](#swap) | decide a model or provider swap on recorded calls |
+| [`train`](#train) | train adapters and run them locally |
+| [`serve`](#serve) | serve artifacts on a GPU host and calibrate the deferral threshold |
+| [`sample`](#sample) | sample a served model with log-probs |
+| [`export`](#export) | export an artifact as PEFT, merged or GGUF |
+| [`attest`](#attest) | check data files against an artifact's attestation |
+| [`ingest`](#ingest) | read traces and logs into a dataset |
+| [`import`](#import) | record other tools' eval results as runs, then compare and gate them |
+| [`monitor`](#monitor) | canaries and provider drift checks |
+| [`watch`](#watch) | baseline an endpoint and catch silent model changes |
+
+## spec
+
+```bash title="Terminal"
+modelstill spec validate <path>
+modelstill spec hash <path>
+```
+
+`validate` prints `<task> v<version> ok` or the first error. `hash` prints the snapshot hash of the spec and the instruction and schema files it names. See [Task spec](/reference/task-spec).
+
+## eval
+
+```bash title="Terminal"
+modelstill eval runs <history>
+modelstill eval compare <history> <before> <after>
+modelstill eval accept <history> <run>
+modelstill eval pairwise <history> <before> <after> --base-url URL (--spec SPEC | --judge-model M --judge-family F --teacher-family T)
+```
+
+`runs` lists every run with its score, interval, case count and benchmark version. `compare` prints the paired verdict, the difference with its interval, and fixed and broken counts. `accept` makes a run the baseline. Run ids may be a unique prefix.
+
+`pairwise` asks a judge model to pick the better answer for each shared case, in both orders, and prints wins, ties, the win rate with an exact interval, a sign test and the inconsistency rate. Flags: `--spec` (judge and teachers from the spec), `--judge-model`, `--judge-family`, `--teacher-family` (repeatable), `--instructions`, `--base-url` (required, OpenAI-compatible) and `--api-key-env` (default `LITELLM_API_KEY`). A judge from a teacher's family is refused. See [Write a scorer](/guides/write-a-scorer).
+
+## push
+
+Every `push` command reads `MODELSTILL_API_TOKEN` (the admin token or a write API key) and `MODELSTILL_API_URL` (default `http://localhost:8787`). `--api URL` overrides the URL.
+
+| Command | Arguments and flags |
+|---|---|
+| `push task <spec>` | `--task SLUG` (default the spec's `task`), `--git-sha SHA` (default `git rev-parse HEAD`) |
+| `push run <history> <run>` | `--task SLUG` (required), `--primary-metric NAME`, `--split {train,val,calib,gold}`, `--judge-model MODEL`, `--no-content` |
+| `push gate <history> <run>` | `--task SLUG`, `--spec SPEC`, `--flip-rate`, `--cost-ratio`, `--p95-latency-ms` (all required), `--previous RUN`, `--primary-metric NAME`, `--not-measured CHECK[=REASON]` (repeatable) |
+| `push review <dataset>` | `--task SLUG` (required) |
+| `push train <artifact>` | `--task SLUG` (required) |
+
+`push gate` records the decision whether it passed or failed, then exits `0` when it passed, `2` when it failed, and `1` on an error (nothing is recorded then), like `report gate`. A CI step that runs it with `set -e` fails on a failed gate; allow exit code 2 if a later step must still run. The other `push` commands exit `0` or `1`.
+
+## report
+
+```bash title="Terminal"
+modelstill report gate <history> <run> --spec SPEC --flip-rate X --cost-ratio X --p95-latency-ms N \
+  [--previous RUN] [--primary-metric NAME] [--top N] [--format markdown|json]
+```
+
+Decides the gate without the API and prints it. `--top` lists that many regressed cases (default 5). Exit codes: `0` passed, `2` failed (the report is still printed), `1` error.
+
+## quickstart
+
+```bash title="Terminal"
+modelstill quickstart <directory>
+```
+
+Writes an example ticket-triage task with 240 generated tickets and a `history.jsonl` with three recorded runs: an accepted baseline and two candidates. It prints the two `report gate` commands to run next: one passes, one fails. Needs no API key and no network. Refuses a directory that exists and is not empty (exit `1`). See the [Quickstart](/quickstart).
+
+## setup
+
+```bash title="Terminal"
+modelstill setup [--agent print|claude|codex]
+```
+
+Prints the setup prompt (`print`, the default) or runs it with `claude -p` or `codex exec` when that binary is on the PATH. Writes nothing itself. See [Set up with your agent](/ai-agents/setup).
+
+## swap
+
+```bash title="Terminal"
+modelstill swap <spec> --records RECORDS --current MODEL --candidate MODEL [--candidate ...] [flags]
+```
+
+| Flag | Meaning |
+|---|---|
+| `--records` | dataset JSONL to replay |
+| `--current` | the model serving the task today, or `recorded[:<teacher-key>]` for its stored answers |
+| `--candidate` | `model` or `model@base-url`; repeat it |
+| `--base-url` | OpenAI-compatible URL, for example a LiteLLM proxy |
+| `--api-key-env` | environment variable holding the key (default `LITELLM_API_KEY`) |
+| `--sample`, `--seed` | replay this many records, chosen by the seed |
+| `--repeats` | runs of the current model (at least 2) |
+| `--metric` | `exact`, `json`, `set_f1` or `module:attr` (default from the spec) |
+| `--prompt` | `module:attr` building messages from `(system, input)` |
+| `--margin` | allowed agreement gap (default the gate's `max_regression`, else 0.02) |
+| `--prices`, `--litellm-config` | prices YAML or a LiteLLM config |
+| `--alias` | LiteLLM `model_name` to change (default the spec's `serve.litellm_alias`) |
+| `--max-cost-ratio`, `--max-p95-latency-ms` | extra limits |
+| `--temperature`, `--max-tokens`, `--workers`, `--timeout` | request settings |
+| `--history`, `--out` | where runs and the JSON report go |
+| `--view`, `--stratify`, `--self-agreement`, `--repeat-key` | recorded mode only |
+
+See [Check a model swap](/guides/model-swap).
+
+## train
+
+```bash title="Terminal"
+modelstill train run <spec> --train TRAIN --val VAL [flags]
+modelstill train infer <artifact> <prompt> [--max-new-tokens N]
+```
+
+| Flag | Meaning |
+|---|---|
+| `--base` | base model (default the spec's `train.base`) |
+| `--method` | `lora`, `full`, `distill`, `grpo` (default the spec's `train.method`) |
+| `--modality` | `text` or `vision` |
+| `--quantization` | `none` or `4bit` (QLoRA) |
+| `--teacher`, `--beta` | distill: teacher model; 0 forward KL, 1 reverse KL |
+| `--reward`, `--loss`, `--num-generations`, `--importance-level` | grpo: reward (`exact_match`, `json_equal` or `module:attr`), loss (`grpo`, `dr_grpo`, `dapo`, `bnpo`, `cispo`), completions per prompt, `token` or `sequence` |
+| `--max-completion-length` | longest sampled answer (distill, grpo) |
+| `--max-steps`, `--max-seq-length`, `--learning-rate`, `--epochs`, `--batch-size`, `--gradient-accumulation`, `--eval-steps`, `--gradient-checkpointing`, `--seed` | training settings |
+| `--output-root` | where artifacts are written (default `artifacts/`) |
+| `--backend` | `trl` (this machine's GPU, the default), `remote` or `modal` |
+| `--host`, `--gpus`, `--stop-service` | remote: SSH host, GPU indexes, systemd user services to stop during the run |
+| `--gpu`, `--timeout-minutes`, `--dry-run` | modal: GPU type, hard stop and spend cap, print the plan and cost only |
+
+Without `--seed`, one run is planned per seed in the spec's `train.seeds`. `train infer` generates with one artifact; `prompt` is chat messages as inline JSON or a JSON file path. It needs a GPU.
+
+## serve
+
+```bash title="Terminal"
+modelstill serve up <artifact> [<artifact> ...] --host HOST [--gpu 0] [--port 8100] [--key-file PATH] [--stop-service NAME]
+modelstill serve down --host HOST [--port 8100]
+modelstill serve calibrate <pairs> --target-error X --deployment FILE [--delta 0.05]
+```
+
+`up` starts vLLM on an SSH GPU host, bound to the host's loopback and protected by the key in `--key-file` (default `~/.config/modelstill/student.key`), and prints the `ssh -L` tunnel. `calibrate` reads JSONL of `{confidence, correct}` and writes the threshold into the deployment file.
+
+## sample
+
+```bash title="Terminal"
+modelstill sample <served-name> --prompts PROMPTS --out OUT [--base-url URL] [--key-file PATH] \
+  [--top-logprobs N] [--temperature X] [--max-tokens N]
+```
+
+Writes one row per prompt: the answer, the model that answered, token counts, the mean log-prob and, with `--top-logprobs`, the alternatives per token. `--base-url` defaults to the local end of the `serve up` tunnel on port 8100.
+
+## export
+
+```bash title="Terminal"
+modelstill export <artifact> --to peft|merged|gguf --out DIR [--host HOST] [--gpu 0] [--outtype q8_0] [--llama-cpp PATH]
+```
+
+`peft` copies the adapter. `merged` (bf16 weights) and `gguf` (llama.cpp; `--outtype` `f16`, `bf16` or `q8_0`) load the model, so they run on `--host`.
+
+## attest
+
+```bash title="Terminal"
+modelstill attest verify <artifact> [--train TRAIN] [--val VAL]
+```
+
+Checks data files against the artifact's `attestation.json`. Exits 1 on a mismatch.
+
+## ingest
+
+| Command | Flags |
+|---|---|
+| `ingest langfuse` | `--from` (required), `--to`, `--name`, `--type` (default `GENERATION`), `--host`, `--api v2\|v1`, `--page-size`, `--out` |
+| `ingest otel <file>` | `--out` |
+| `ingest litellm <file>` | `--model-field model\|model_group`, `--out` |
+| `ingest jsonl <file>` | `--input` (required), `--output`, `--model-field`, `--model`, `--id-field`, `--error-field`, `--out` |
+| `ingest braintrust [file]` | one of `<file>`, `--project-id`, `--dataset-id`; `--span-type`, `--cases`, `--api-url`, `--page-size`, `--out` |
+
+`--out` is the dataset JSONL to merge into. See [Import traces](/guides/import-traces).
+
+## import
+
+| Command | Extra flags |
+|---|---|
+| `import deepeval <file>` | `--model` |
+| `import inspect <file>` | `--scorer NAME[.KEY]`, `--model` |
+| `import promptfoo <file>` | `--provider` |
+| `import braintrust [file]` | one of `<file>`, `--experiment-id`; `--scorer`, `--model`, `--api-url`, `--page-size` |
+
+All take `--history` and `--task` (required), `--accept`, `--gate SPEC`, `--flip-rate`, `--cost-ratio`, `--p95-latency-ms` (default measured from the file) and `--primary-metric`. With `--gate`, a failed gate exits 1.
+
+## monitor
+
+```bash title="Terminal"
+modelstill monitor canary <config> [--fail-on-alert] [--api URL | --no-api]
+modelstill monitor drift <config> [--fail-on-alert] [--api URL | --no-api]
+```
+
+## watch
+
+```bash title="Terminal"
+modelstill watch baseline <config> [--replace]
+modelstill watch check <config> [--fail-on-alert] [--fallback-deployment FILE] [--api URL | --no-api]
+```
+
+Monitor and watch exit `0` when done, `1` on a config or store error, `2` when an alert fired and `--fail-on-alert` was given. See [Monitor a task](/guides/monitor-a-task).
+
+`monitor canary`, `monitor drift` and `watch check` push canary runs and alerts to the API when `MODELSTILL_API_URL` and `MODELSTILL_API_TOKEN` are both set, or when `--api URL` is given (it then needs `MODELSTILL_API_TOKEN`). `--no-api` turns it off. The push never changes the exit code; unsent records are kept in `state_dir/api-outbox.jsonl` and sent by the next run. With the API on, `--fallback-deployment` also sets the task's API deployment record to `off` on a critical alert.

@@ -1,0 +1,34 @@
+---
+title: Guides
+description: Step-by-step recipes for evaluating, deciding, training, serving and monitoring a task with ModelStill.
+icon: BookOpen
+---
+
+import { Function, Gauge, Database, FileArrowDown, Scales, GitPullRequest, Swap, GraduationCap, HardDrives, Cpu, CloudArrowUp, Pulse } from "@phosphor-icons/react/ssr";
+
+## Evaluate
+
+<Cards>
+  <Card icon={<Function />} title="Write a scorer" href="/guides/write-a-scorer" description="Exact match, set F1, JSON equality, an LLM judge checked against people and a pairwise judge." />
+  <Card icon={<Gauge />} title="Use an LLM as a judge" href="/guides/llm-as-a-judge" description="A judge from another family, checked against human labels with kappa, stability and a corrected score." />
+  <Card icon={<Database />} title="Build a golden dataset" href="/guides/golden-dataset" description="From production traces to a reviewed, versioned set of cases that every change is gated on." />
+  <Card icon={<FileArrowDown />} title="Import traces and eval results" href="/guides/import-traces" description="Langfuse, Braintrust, OpenTelemetry, LiteLLM, JSONL, DeepEval, Inspect, Promptfoo." />
+  <Card icon={<Scales />} title="Measure a noise floor" href="/guides/noise-floor" description="How much a model disagrees with itself, and why it bounds every comparison." />
+</Cards>
+
+## Decide
+
+<Cards>
+  <Card icon={<GitPullRequest />} title="Regression-test changes in CI" href="/guides/ci-gate" description="Evals in CI with GitHub Actions: a sticky pull-request comment and a failing job when the gate fails." />
+  <Card icon={<Swap />} title="Check a model swap" href="/guides/model-swap" description="Decide a move to another model or provider from recorded calls." />
+</Cards>
+
+## Train and serve
+
+<Cards>
+  <Card icon={<GraduationCap />} title="Distil a task end to end" href="/guides/distil-a-task" description="From recorded answers to a served, monitored student." />
+  <Card icon={<HardDrives />} title="Train on your own GPU host" href="/guides/train-on-a-gpu-host" description="Train, export and serve over SSH." />
+  <Card icon={<Cpu />} title="Train on Modal" href="/guides/train-on-modal" description="Capped training runs and scale-to-zero serving." />
+  <Card icon={<CloudArrowUp />} title="Serve with the LiteLLM plugin" href="/guides/serve-with-litellm" description="off, shadow, serve and rollback." />
+  <Card icon={<Pulse />} title="Monitor a task" href="/guides/monitor-a-task" description="Canaries, drift and the endpoint watchdog." />
+</Cards>

@@ -1,0 +1,148 @@
+---
+title: Serve with the LiteLLM plugin
+description: Put a trained student behind the task's existing LiteLLM name, roll it out off, shadow, serve, and roll it back.
+icon: CloudArrowUp
+---
+
+The ModelStill plugin is a LiteLLM custom provider, loaded by your LiteLLM proxy. Callers keep sending the task's model name; only the proxy config changes. If the plugin config is missing or broken, only this task's calls fail, and LiteLLM's fallback answers them. The proxy always starts.
+
+<Steps>
+
+<Step>
+
+### Install the plugin in the proxy image
+
+The plugin is the `modelstill[litellm]` extra, pinned to `litellm==1.101.0`. It needs only pydantic and PyYAML, which the proxy already ships, so build the wheel and install it without dependencies:
+
+```bash title="Terminal"
+cd python/modelstill && uv build --wheel
+pip install --no-deps dist/modelstill-0.1.0-py3-none-any.whl
+```
+
+`deploy/litellm/Dockerfile` in the repository does this for the official proxy image. Copy `deploy/litellm/modelstill_handler.py` next to the proxy's `config.yaml`.
+
+</Step>
+
+<Step>
+
+### Point the task name at the plugin
+
+```yaml title="config.yaml"
+model_list:
+  - model_name: ticket-priority
+    litellm_params: { model: modelstill/ticket-priority }
+    model_info: { input_cost_per_token: 9.1e-8, output_cost_per_token: 1.82e-7 }
+  - model_name: ticket-priority-cloud
+    litellm_params: { model: <the cloud model the task used before> }
+router_settings:
+  fallbacks:
+    - ticket-priority: [ticket-priority-fallback]
+    - ticket-priority-cloud: [ticket-priority-fallback]
+litellm_settings:
+  custom_provider_map:
+    - { provider: modelstill, custom_handler: modelstill_handler.handler }
+```
+
+The old cloud deployment moves to `<task>-cloud` unchanged. The plugin calls it through the proxy's own router, so retries, timeouts and provider keys stay in `config.yaml`. The task name keeps the cloud prices, so a student answer is priced at cloud prices: spend is overstated, never hidden.
+
+</Step>
+
+<Step>
+
+### Write the plugin config
+
+`MODELSTILL_LITELLM_CONFIG` names it. Relative paths are relative to this file.
+
+```yaml title="plugin.yaml"
+reload_seconds: 30
+tasks:
+  ticket-priority:
+    deployment: deployment.ticket-priority.yaml
+    confidence: exp_mean_logprob
+    student:
+      base_url: http://gpu-host:8000
+      api_key_env: MODELSTILL_STUDENT_KEY
+      timeout: 30
+    cloud_model: ticket-priority-cloud
+sinks:
+  clickhouse: {url: http://clickhouse:8123, user: modelstill_writer, password_env: MODELSTILL_CLICKHOUSE_PASSWORD}
+  jsonl: events.jsonl
+  max_queue: 10000
+  batch_size: 200
+  flush_seconds: 1
+```
+
+The student is any OpenAI-compatible server that returns log-probs, such as vLLM from `modelstill serve up` or the Modal deployment. `base_url` has no `/v1`.
+
+</Step>
+
+<Step>
+
+### Start in mode off
+
+```yaml title="deployment.ticket-priority.yaml"
+task: ticket-priority
+mode: "off"
+student_model: <served-name>
+threshold: null
+shadow_sample: 0.1
+```
+
+The cloud answers everything and every call is logged. `"off"` may be quoted or bare; both mean off.
+
+</Step>
+
+<Step>
+
+### Shadow, then serve
+
+Set `mode: shadow`. A `shadow_sample` share of calls also goes to the student in the background, off the request path, and both answers are logged. Compare them on the [Traffic](/dashboard/traffic) page.
+
+When the student's gate passes, calibrate the threshold on a calibration split and serve:
+
+```bash title="Terminal"
+modelstill serve calibrate calib.jsonl --target-error 0.05 --deployment deployment.ticket-priority.yaml
+```
+
+Then set `mode: serve`. The student answers when it is the deployed model and its confidence reaches `threshold`; otherwise the cloud answers, with the reason logged.
+
+</Step>
+
+</Steps>
+
+The plugin re-reads deployment files every `reload_seconds`. A file that fails to parse or validate is ignored with a warning (`keeps its deployment`), and the last good deployment stays.
+
+## Change the mode from the API
+
+Add an `api` block to the plugin config and the plugin also polls the task's deployment record in the API, on the same `reload_seconds`, and once on the first call after start:
+
+```yaml title="plugin.yaml"
+api:
+  url: http://localhost:8787
+  token_file: secrets/api-token   # a read API key, relative to this file; or token_env
+  timeout: 2
+```
+
+The record is looked up under the deployment file's `task`. Then `set_deployment_mode` (MCP) or `PUT /v1/tasks/{slug}/deployment` changes the running proxy, with no file edit or restart. The API record wins whenever the API answers with one; the file serves when the API has no record for the task, and stays the fallback during an outage: an unreachable API or an invalid reply keeps the last good deployment, and a file edit made during the outage applies. The plugin's `health()` shows `deployment_source` (`file` or `api`) and `api_error`. See [Serving modes](/concepts/serving-modes).
+
+## Roll back
+
+Set the mode to `off`: in the API when the plugin follows it, otherwise (or while the API is down) `mode: off` in the deployment file. Within `reload_seconds` every request goes to the cloud. Confirm on the Traffic page that served by student drops to 0. To go back to an older student instead, set the student model to its versioned name.
+
+## What gets logged
+
+Each call writes one row to `modelstill.serving_events`: the deployment id, mode, who answered, both answers when both exist, the deferral reason, confidence, latency, cost and the request hash. In shadow mode the row is written after the student answers. The response's `model` stays the task name. Proxy cache hits never reach the plugin. Streaming is refused, because the router needs the whole answer to decide.
+
+A bounded queue sits in front of every writer. When it is full, rows are dropped and counted rather than delaying an answer; the drop count is on the plugin's health output.
+
+## Try it locally without a GPU
+
+```bash title="Terminal"
+uv venv && uv pip install "litellm[proxy]==1.101.0"
+uv pip install --no-deps python/modelstill/dist/modelstill-0.1.0-py3-none-any.whl
+MODELSTILL_LITELLM_CONFIG=plugin.yaml litellm --config config.yaml --port 14999
+curl -s localhost:14999/v1/chat/completions -H 'content-type: application/json' \
+  -d '{"model": "ticket-priority", "messages": [{"role": "user", "content": "The site is down"}]}'
+```
+
+Give `ticket-priority-cloud` a `mock_response` in `config.yaml` to avoid calling a real provider.

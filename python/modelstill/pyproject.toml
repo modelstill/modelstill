@@ -1,0 +1,113 @@
+[project]
+name = "modelstill"
+version = "0.1.0"
+description = "Open-source LLM eval framework for CI: regression-test prompt and model changes and gate the release"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+readme = "README.md"
+keywords = [
+    "llm",
+    "llm-evaluation",
+    "llm-evals",
+    "evals",
+    "llm-as-a-judge",
+    "release-gate",
+    "golden-dataset",
+    "prompt-testing",
+    "ci",
+    "regression-testing",
+    "confidence-intervals",
+    "langfuse",
+    "litellm",
+    "opentelemetry",
+    "distillation",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Framework :: Pytest",
+]
+dependencies = [
+    "pydantic==2.11.7",
+    "pyyaml==6.0.2",
+    "scipy==1.16.1",
+]
+
+[project.optional-dependencies]
+litellm = [
+    "litellm==1.101.0",
+]
+dev = [
+    "modelstill[litellm,pytest]",
+    "pytest==8.4.1",
+    "pytest-asyncio==1.1.0",
+    "ruff==0.12.8",
+    "basedpyright==1.31.1",
+    "types-pyyaml==6.0.12.20250809",
+]
+train = [
+    "torch==2.15.0",
+    "transformers==5.24.0",
+    "trl==1.18.2",
+    "peft==0.22.0",
+    "accelerate==1.16.0",
+    "datasets==5.2.0",
+    "bitsandbytes==0.50.2",
+    "sentencepiece==0.2.3",
+]
+modal = [
+    "modal==1.6.4",
+]
+pytest = [
+    "pytest==8.4.1",
+]
+
+[project.urls]
+Homepage = "https://modelstill.com"
+Documentation = "https://docs.modelstill.com"
+Repository = "https://github.com/modelstill/modelstill"
+Issues = "https://github.com/modelstill/modelstill/issues"
+Changelog = "https://docs.modelstill.com/changelog"
+
+[project.scripts]
+modelstill = "modelstill.cli:main"
+
+[project.entry-points.pytest11]
+modelstill = "modelstill.pytest_plugin"
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/modelstill"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers -m 'not slow'"
+markers = ["slow: trains or runs real models; needs the train extra (run with -m slow)"]
+xfail_strict = true
+filterwarnings = [
+    "error",
+    "ignore:Item 'summary' on TypedDict class 'ChatCompletionReasoningItem':UserWarning",
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "PLC0415", "PGH003", "PGH004", "BLE001", "RUF"]
+
+[tool.basedpyright]
+include = ["src", "tests"]
+typeCheckingMode = "standard"
+reportIgnoreCommentWithoutRule = true
+reportUnnecessaryTypeIgnoreComment = true

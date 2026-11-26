@@ -1,0 +1,36 @@
+name: ModelStill gate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: modelstill-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Record the candidate run with your eval script, which prints run, flip_rate, cost_ratio and p95_latency_ms
+        id: candidate
+        run: python scripts/record_eval.py --history evals/history.jsonl >> "$GITHUB_OUTPUT"
+
+      - uses: modelstill/modelstill/.github/actions/modelstill-gate@COMMIT_SHA
+        with:
+          spec: tasks/TASK/spec.yaml
+          history: evals/history.jsonl
+          run: ${{ steps.candidate.outputs.run }}
+          baseline: ${{ vars.MODELSTILL_BASELINE_RUN }}
+          flip-rate: ${{ steps.candidate.outputs.flip_rate }}
+          cost-ratio: ${{ steps.candidate.outputs.cost_ratio }}
+          p95-latency-ms: ${{ steps.candidate.outputs.p95_latency_ms }}
+          python-version: "3.12"

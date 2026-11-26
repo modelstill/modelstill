@@ -1,0 +1,96 @@
+---
+title: Import traces and eval results
+description: Turn the calls you already log into a dataset, and record other tools' eval results as runs you can compare and gate.
+icon: FileArrowDown
+---
+
+ModelStill does not run its own trace store. It reads what you already have. There are three ways in:
+
+- `modelstill ingest` reads traces and logs into a **dataset** (inputs plus answers keyed by model).
+- `modelstill import` records another tool's eval results as **runs** in a history file.
+- The [pytest plugin](/integrations/pytest) records a test session as a run.
+
+None of them needs an extra dependency. Network reads use the standard library.
+
+## Ingest traces into a dataset
+
+<Tabs items={["Langfuse", "Braintrust", "OpenTelemetry", "LiteLLM", "Any JSONL"]}>
+
+```bash tab="Langfuse"
+export LANGFUSE_PUBLIC_KEY=pk-lf-your-key LANGFUSE_SECRET_KEY=sk-lf-your-key
+export LANGFUSE_HOST=https://langfuse.example.com
+modelstill ingest langfuse --from 2026-11-01T00:00:00Z --to 2026-11-24T00:00:00Z \
+  --name <observation-name> --out data/langfuse.jsonl
+```
+
+```bash tab="Braintrust"
+export BRAINTRUST_API_KEY=your-braintrust-api-key
+modelstill ingest braintrust --project-id <project-id> --out data/braintrust.jsonl
+modelstill ingest braintrust logs.json --out data/braintrust.jsonl
+```
+
+```bash tab="OpenTelemetry"
+modelstill ingest otel traces.json --out data/otel.jsonl
+```
+
+```bash tab="LiteLLM"
+modelstill ingest litellm spend_logs.csv --out data/litellm.jsonl
+```
+
+```bash tab="Any JSONL"
+modelstill ingest jsonl calls.jsonl --input request.messages --output response.text \
+  --model-field response.model --id-field id --error-field error --out data/calls.jsonl
+```
+
+</Tabs>
+
+Rows with the same input are merged into one item, so answers from different models line up. Running an ingest again merges new answers into the same file. The command prints how many records it read, how many items they made and how many were new or changed.
+
+See [Langfuse](/integrations/langfuse), [Braintrust](/integrations/braintrust), [OpenTelemetry](/integrations/opentelemetry) and [LiteLLM](/integrations/litellm) for each source's details. A Braintrust dataset can also become benchmark cases: add `--cases golden.jsonl`.
+
+### Any JSONL
+
+- Fields are dotted paths.
+- `--input a.text,a.lang` builds the object `{"text": ..., "lang": ...}`.
+- `--model NAME` names one model for every row instead of `--model-field`. Give exactly one of them when `--output` is set.
+- Without `--output`, only inputs are recorded, for labelling later.
+
+## Import eval results as runs
+
+```bash title="Terminal"
+modelstill import deepeval .deepeval/.latest_run_full.json --history runs.jsonl --task <task> --accept
+modelstill import promptfoo results.json --history runs.jsonl --task <task> \
+  --gate tasks/<task>/spec.yaml --flip-rate 0 --cost-ratio 1
+modelstill import braintrust --experiment-id <experiment-id> --history runs.jsonl --task <task> \
+  --scorer <score>
+modelstill eval compare runs.jsonl <baseline> <candidate>
+```
+
+Each file or Braintrust experiment becomes one run, or one run per column for Promptfoo. Two files over the same cases get the same benchmark version, so they pair case by case. Each case's score is the tool's own verdict: ModelStill does not re-score anything. It adds the intervals, the paired comparison and the gate. See [DeepEval, Inspect and Promptfoo](/integrations/eval-tools) and [Braintrust](/integrations/braintrust).
+
+## Gate an import
+
+`--gate` takes a task spec, a YAML file with a `gate:` key, or a bare gate. It decides against the latest accepted run of the same benchmark version and stores the decision in the history file. A failed gate exits 1.
+
+- Eval files do not measure flip rate or cost, so `--gate` requires `--flip-rate` and `--cost-ratio`. For a prompt change on the same model, the honest values are usually `--flip-rate 0 --cost-ratio 1`.
+- p95 latency is measured from the file's latencies. Pass `--p95-latency-ms` when the file has none.
+- A gate with `max_regression` needs an accepted baseline: import one with `--accept`, or run `modelstill eval accept`.
+- With both `--accept` and `--gate`, the run is accepted only when its gate passes.
+
+## Then
+
+- Queue disagreements for people: `modelstill push review data/langfuse.jsonl --task <task>`.
+- Replay records against a candidate model: [Check a model swap](/guides/model-swap).
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `401` from `ingest langfuse` | check `LANGFUSE_HOST` and the project's key pair |
+| `400` mentioning `parseIoAsJson` or an unknown path | an older self-hosted Langfuse: add `--api v1` |
+| `read 0 records` from LiteLLM | set `store_prompts_in_spend_logs: true` in the proxy's `general_settings` |
+| `both runs must score the same cases` | rerun the eval on the same dataset |
+| `no accepted baseline` | import a baseline with `--accept` |
+| `scorer 'x' gives several values` | an Inspect scorer returns a dict: use `--scorer x.<key>` |
+| `401` from a Braintrust command | check `BRAINTRUST_API_KEY` and `--api-url` |
+| `the experiment has several scores; pick one` | add `--scorer` with one of the listed names |

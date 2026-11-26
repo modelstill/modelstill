@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "overrides": [
+    {
+      "files": ["apps/website/src/**/*.ts", "apps/website/src/**/*.tsx", "apps/website/tests/fixtures/hooks-lint/**/*.tsx"],
+      "rules": { "react/rules-of-hooks": "error" }
+    }
+  ]
+}

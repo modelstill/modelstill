@@ -1,0 +1,27 @@
+{
+  "name": "@modelstill/redis-module",
+  "license": "Apache-2.0",
+  "type": "module",
+  "version": "0.1.0",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "cleanup": "rimraf node_modules .turbo dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelstill/logger": "workspace:*",
+    "ioredis": "5.4.2"
+  }
+}

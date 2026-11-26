@@ -1,0 +1,45 @@
+{
+  "name": "@modelstill/website",
+  "license": "Apache-2.0",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 4323",
+    "build": "next build",
+    "start": "next start -p 4321",
+    "test": "bun test --timeout 15000",
+    "typecheck": "tsc --noEmit --incremental false",
+    "cleanup": "rimraf node_modules .next .turbo"
+  },
+  "dependencies": {
+    "@better-auth/api-key": "1.6.19",
+    "@modelstill/ui": "workspace:*",
+    "@phosphor-icons/react": "2.1.10",
+    "@tanstack/react-table": "8.21.3",
+    "better-auth": "1.6.19",
+    "class-variance-authority": "0.7.1",
+    "motion": "14.14.0",
+    "next": "16.2.9",
+    "next-themes": "0.4.4",
+    "radix-ui": "1.8.1",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "sonner": "2.0.8",
+    "zod": "3.25.32"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "21.0.4",
+    "@tailwindcss/postcss": "4.3.1",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.0",
+    "@types/bun": "1.2.8",
+    "@types/node": "22.15.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "happy-dom": "21.0.4",
+    "postcss": "8.5.3",
+    "rimraf": "6.0.1",
+    "tailwindcss": "4.3.1",
+    "typescript": "5.8.2"
+  }
+}

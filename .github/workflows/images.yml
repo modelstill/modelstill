@@ -1,0 +1,128 @@
+name: Images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "package.json"
+      - "bun.lock"
+      - "turbo.json"
+      - ".github/workflows/images.yml"
+      - ".github/scripts/changed-apps.sh"
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: "Comma-separated images to build (api,website,mcp)"
+        required: true
+        default: api,website
+      bump:
+        description: "Commit the new tags into deploy/k8s/modelstill/kustomization.yaml"
+        type: boolean
+        default: false
+
+concurrency:
+  group: images
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    outputs:
+      apps: ${{ steps.list.outputs.apps }}
+      owner: ${{ steps.list.outputs.owner }}
+      sha: ${{ steps.list.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: list
+        env:
+          DISPATCH: ${{ github.event.inputs.apps }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          apps=$(bash .github/scripts/changed-apps.sh --deployed-ref origin/main)
+          {
+            echo "apps=$apps"
+            echo "owner=${OWNER,,}"
+            echo "sha=${GITHUB_SHA:0:7}"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: changes
+    if: ${{ needs.changes.outputs.apps != '[]' }}
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.changes.outputs.apps) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/ci/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ needs.changes.outputs.owner }}/modelstill-${{ matrix.app }}:${{ needs.changes.outputs.sha }}
+            ghcr.io/${{ needs.changes.outputs.owner }}/modelstill-${{ matrix.app }}:main
+          cache-from: type=gha,scope=modelstill-${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=modelstill-${{ matrix.app }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.MODELSTILL_PUBLIC_API_URL || 'https://api.modelstill.com' }}
+            NEXT_PUBLIC_MCP_URL=${{ vars.MODELSTILL_PUBLIC_MCP_URL || 'https://mcp.modelstill.com' }}
+            GIT_SHA=${{ needs.changes.outputs.sha }}
+      - name: Mark as built
+        env:
+          APP: ${{ matrix.app }}
+        run: mkdir -p built && echo "$APP" > "built/$APP"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: built-${{ matrix.app }}
+          path: built/
+          retention-days: 1
+
+  bump:
+    needs: [changes, build]
+    if: >-
+      ${{ !cancelled()
+      && needs.changes.outputs.apps != '[]'
+      && (github.event_name == 'workflow_dispatch' && inputs.bump
+      || github.event_name == 'push' && vars.MODELSTILL_AUTO_BUMP == 'true') }}
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+          ssh-key: ${{ secrets.DEPLOY_BUMP_KEY }}
+          ref: main
+          fetch-depth: 0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: built-*
+          path: built
+          merge-multiple: true
+      - name: Point the kustomization at the new tags
+        env:
+          SHA: ${{ github.sha }}
+          OWNER: ${{ needs.changes.outputs.owner }}
+        run: bash .github/scripts/bump-tags.sh built

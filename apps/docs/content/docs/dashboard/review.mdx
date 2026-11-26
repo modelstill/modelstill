@@ -1,0 +1,46 @@
+---
+title: Review queue
+description: Where people settle disagreements between teacher models - accept an answer or correct it, and how decisions become labelled data.
+icon: UserCheck
+---
+
+When two teacher models disagree on an item, it goes to the review queue. A person accepts the item or corrects it by writing the right answer. Only a correction stores an answer, so use Correct for items that should join a golden dataset. Decided items are labelled data: training reads accepted and corrected items.
+
+## Fill the queue
+
+Push a dataset whose rows carry each teacher's answer:
+
+```bash title="Terminal"
+modelstill push review dataset.jsonl --task <task>
+```
+
+Each row needs an `input`. Answers come from `outputs` (the format `modelstill ingest` writes) or `teacher_outputs`. When two or more answers differ, the item is queued; when they agree it is stored as not needing review. A row may set `agreement` and `review_state` itself. Items are upserted by input hash, and a human decision is never overwritten.
+
+Broken cases from [Compare](/dashboard/compare) and requests from [Traffic](/dashboard/traffic) can be sent to the queue from the dashboard too.
+
+## Decide an item
+
+1. Enter your name in the **Reviewer** field. It is saved in your browser, and the buttons stay disabled until it is set.
+2. Open an item. The teacher outputs are shown side by side with the differing fields highlighted.
+3. Press **Accept**, or **Correct** to write the right answer as JSON and **Save correction**.
+
+Switch between **Waiting**, **Decided** and **All**, and between a table and a board. Search by input hash.
+
+The same decision is `POST /v1/review-queue/{itemId}/decision` in the API and `decide_review_item` in the [MCP server](/ai-agents/mcp).
+
+## Accept many items at once
+
+In the table, tick the checkbox on each row you want, or the checkbox in the header to select every row on the current page. A bar above the table shows how many are selected:
+
+- **Accept** records an accept decision for every selected item that is still waiting, under your reviewer name. Selected items that are already decided are skipped and the bar says how many.
+- **Clear** empties the selection.
+
+A correction needs its own answer, so **Correct** stays a one-item action. If the save fails, the selection stays and the error is shown above the table. In the API the bulk accept is `POST /v1/review-queue/decisions` with the item ids, `"verdict": "accept"` and the reviewer.
+
+## Page through the queue
+
+The page loads up to 500 waiting items and shows 25 per page. Use the arrows in the table footer to move between pages. When **J** and **K** move past the last row of a page, the table turns to the page holding the open item.
+
+## Labelled data
+
+Decided items appear under **Datasets > Labelled from review**, with the answer a reviewer settled on.

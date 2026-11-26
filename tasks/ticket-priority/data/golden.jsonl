@@ -1,0 +1,6 @@
+{"id": "t1", "input": "The checkout page returns 500 for every customer.", "expected": "urgent"}
+{"id": "t2", "input": "Can you change the email on my invoice?", "expected": "normal"}
+{"id": "t3", "input": "Small typo on the pricing page.", "expected": "low"}
+{"id": "t4", "input": "We were charged twice for this month's subscription.", "expected": "normal"}
+{"id": "t5", "input": "Nobody on our team can log in since this morning.", "expected": "urgent"}
+{"id": "t6", "input": "The logo looks slightly blurry on the login screen.", "expected": "low"}

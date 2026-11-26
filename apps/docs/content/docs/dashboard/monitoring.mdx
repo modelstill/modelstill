@@ -1,0 +1,34 @@
+---
+title: Monitoring
+description: Canary runs with their pass-rate intervals and the alerts raised for a task.
+icon: Pulse
+---
+
+**Monitoring** shows two tables.
+
+- **Canary runs:** when each ran, the provider label, items passed of total, the pass rate with its exact interval, and whether all passed.
+- **Alerts:** when each was raised, its severity, kind and status. Open one to see its payload.
+
+The page is read-only: alerts cannot be acknowledged from the dashboard yet.
+
+## Where the data comes from
+
+The page reads the API's canary and alert tables (`GET /v1/tasks/{slug}/canaries` and `/alerts`).
+
+The monitoring commands fill them. `modelstill monitor canary`, `modelstill monitor drift` and `modelstill watch check` push their canary runs and every alert to the API when `MODELSTILL_API_URL` and `MODELSTILL_API_TOKEN` are set, or when given `--api URL`. They also keep writing ClickHouse, JSONL in their `state_dir`, the log and an optional Discord webhook.
+
+```bash title="Terminal"
+export MODELSTILL_API_URL=http://localhost:8787 MODELSTILL_API_TOKEN=ms_live_your_key_here
+modelstill monitor canary monitor.yaml --fail-on-alert
+```
+
+The push is best effort: if the API is down, the run still succeeds, the records wait in `state_dir/api-outbox.jsonl`, and the next run sends them. A drift or watch check that raises no alert adds nothing here; its full result stays in ClickHouse and `state_dir`. See [Monitor a task](/guides/monitor-a-task).
+
+Alerts those commands raise:
+
+| Alert | Raised when |
+|---|---|
+| `canary_below_floor` | the canary interval's upper bound is below `floor` |
+| `canary_regression` | the paired comparison with the previous run on the same items says worse |
+| `provider_drift` | a temperature-0 answer to a fixed prompt changed |
+| `watch_*` | the endpoint watchdog found a change against its baseline |

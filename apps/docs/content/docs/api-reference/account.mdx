@@ -1,0 +1,20 @@
+---
+title: Account
+description: Create an API key and finish onboarding. Both need a signed-in dashboard session.
+icon: Key
+full: true
+_openapi:
+  preload:
+    - ./openapi.json
+---
+
+export default function Layout(props) {
+  const { APIPage, OpenAPIPage } = props.components ?? {};
+  const Comp = OpenAPIPage ?? APIPage;
+  return (
+    <>
+      {props.children}
+      <Comp document="./openapi.json" operations={[{ path: "/v1/api-keys", method: "post" }, { path: "/v1/me/onboarding", method: "post" }]} />
+    </>
+  );
+}

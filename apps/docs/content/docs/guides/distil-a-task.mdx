@@ -1,0 +1,154 @@
+---
+title: Distil a task end to end
+description: From recorded cloud answers to a gated, served and monitored student model, with the command for each step.
+icon: GraduationCap
+---
+
+This guide strings the other guides together for one task. The example task extracts the technologies named in a job posting and answers JSON. Every step links to its own page for detail.
+
+<Callout type="warn">
+Do not train on a laptop. Training runs on a GPU host over SSH (`--backend remote`) or on Modal (`--backend modal`).
+</Callout>
+
+<Steps>
+
+<Step>
+
+### Spec the task
+
+Write `tasks/extract-technologies/spec.yaml` with its prompt, schema, requirements, two teachers from different families, a judge from a third family, and the gate. See [Task spec](/reference/task-spec).
+
+```bash title="Terminal"
+modelstill spec validate tasks/extract-technologies/spec.yaml
+modelstill push task tasks/extract-technologies/spec.yaml
+```
+
+</Step>
+
+<Step>
+
+### Record production calls
+
+Turn on the LiteLLM plugin in mode `"off"` so every call is logged, or ingest the traces you already have:
+
+```bash title="Terminal"
+modelstill ingest langfuse --from 2026-11-01T00:00:00Z --name extract-technologies --out data/records.jsonl
+```
+
+See [Import traces](/guides/import-traces).
+
+</Step>
+
+<Step>
+
+### Label and review
+
+Answer the records with both teachers (any script that writes their answers under `outputs`), then queue the disagreements:
+
+```bash title="Terminal"
+modelstill push review data/records.jsonl --task extract-technologies
+```
+
+People settle them in the [review queue](/dashboard/review). Accepted and corrected items are your labels.
+
+</Step>
+
+<Step>
+
+### Record the cloud baseline
+
+Score today's cloud model on the gold set, record the run and accept it:
+
+```bash title="Terminal"
+modelstill eval accept history.jsonl <cloud-run>
+modelstill push run history.jsonl <cloud-run> --task extract-technologies
+```
+
+</Step>
+
+<Step>
+
+### Build the training files
+
+Training data is chat JSONL, `{"messages": [system, user, assistant]}`; the loss covers only the assistant turn. Build it from accepted answers, filter rows against the output schema, split by a group (for example by employer) so near-duplicates do not leak between train and validation, and leave the gold set out.
+
+</Step>
+
+<Step>
+
+### Plan and train
+
+```bash title="Terminal"
+modelstill train run tasks/extract-technologies/spec.yaml --train train.jsonl --val val.jsonl \
+  --seed 1 --backend modal --dry-run
+```
+
+The dry run prints the plan, the files it would upload, the GPU, the timeout and the cost cap, and contacts nothing. Drop `--dry-run` to train, or train on your own host. See [Train on Modal](/guides/train-on-modal) and [Train on a GPU host](/guides/train-on-a-gpu-host).
+
+The artifact lands at `artifacts/<task>/<snapshot8>-<manifest8>-s<seed>`, never overwritten. Check its data and push it to the [training console](/dashboard/training):
+
+```bash title="Terminal"
+modelstill attest verify artifacts/extract-technologies/<version> --train train.jsonl --val val.jsonl
+modelstill push train artifacts/extract-technologies/<version> --task extract-technologies
+```
+
+</Step>
+
+<Step>
+
+### Serve it and score it
+
+Serve the artifact with vLLM (`modelstill serve up` on your host, or the Modal deployment), then score the served student against the stored production answers, without calling the cloud model:
+
+```bash title="Terminal"
+modelstill swap tasks/extract-technologies/spec.yaml --records data/gold_records.jsonl \
+  --current recorded --candidate <served-name>@http://gpu-host:8000 \
+  --base-url http://localhost:4000 --history history.jsonl --out swap.json
+```
+
+Score it on the gold set the same way you scored the cloud baseline, record the run, and gate it:
+
+```bash title="Terminal"
+modelstill push run history.jsonl <student-run> --task extract-technologies
+modelstill push gate history.jsonl <student-run> --task extract-technologies \
+  --spec tasks/extract-technologies/spec.yaml --previous <cloud-run> \
+  --flip-rate 0.004 --cost-ratio 0.31 --p95-latency-ms 870
+```
+
+</Step>
+
+<Step>
+
+### Roll out
+
+Only after the gate passes: `shadow`, calibrate the threshold, then `serve`. See [Serve with the LiteLLM plugin](/guides/serve-with-litellm).
+
+</Step>
+
+<Step>
+
+### Watch it
+
+Record a watchdog baseline on the day you approve the endpoint, then check it on a schedule with a fallback to the cloud:
+
+```bash title="Terminal"
+modelstill watch baseline watch.yaml
+modelstill watch check watch.yaml --fail-on-alert --fallback-deployment deployment.extract-technologies.yaml
+```
+
+See [Monitor a task](/guides/monitor-a-task).
+
+</Step>
+
+</Steps>
+
+## Training methods
+
+| `--method` | What it does |
+|---|---|
+| `lora` | trains an adapter |
+| `full` | trains every weight (default learning rate 1e-5) and publishes a merged artifact |
+| `distill --teacher <model> [--beta 1.0]` | on-policy distillation: the student samples, the teacher scores every token, the student trains on the reverse KL (`--beta 0` for forward KL). Teacher and student must share a tokenizer |
+| `grpo --reward json_equal [--loss cispo]` | reinforcement learning against the recorded answer with a reward (`exact_match`, `json_equal` or `module:attr`); the best checkpoint has the highest validation reward |
+
+Add `--quantization 4bit` for QLoRA, or `--modality vision` with a vision-language base. A stopped run resumes from its latest checkpoint when the same command runs again.

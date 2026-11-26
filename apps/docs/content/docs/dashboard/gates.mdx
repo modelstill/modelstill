@@ -1,0 +1,44 @@
+---
+title: Gates and reports
+description: Every gate decision of a task with its thresholds and measured values, the gate report page, and checks marked not measured.
+icon: ShieldCheck
+---
+
+**Gates** lists every recorded gate decision, newest first. Each row shows whether it passed, the date, how many cases improved and regressed against the baseline, and a summary of the checks. Expand a row for every check and links to the report, the gated run, the baseline run and the comparison.
+
+## Record a gate
+
+```bash title="Terminal"
+modelstill push gate history.jsonl <run> --task <task> --spec tasks/<task>/spec.yaml \
+  --previous <baseline-run> --flip-rate 0.004 --cost-ratio 0.31 --p95-latency-ms 870
+```
+
+`push gate` decides the spec's gate on the run, as `modelstill report gate` does, and stores the decision with the full report. The run must be pushed first. Like `report gate`, it exits `0` when the gate passed, `2` when it failed (the failed decision is still recorded), and `1` on an error, so a CI step running it fails on a failed gate.
+
+## The checks
+
+| Check | Passes when | Measured value |
+|---|---|---|
+| `metric_lower_bound` | lower bound of the run's interval is at least `lower_ci_min` | the run's lower bound |
+| `regression_vs_baseline` | lower bound of the paired difference against the baseline is at least `-max_regression` | that lower bound |
+| `flip_rate` | at most `max_flip_rate` | passed in with `--flip-rate` |
+| `cost_ratio` | at most `max_cost_ratio` | passed in with `--cost-ratio` |
+| `p95_latency_ms` | at most `max_p95_latency_ms` | passed in with `--p95-latency-ms` |
+
+The gate passes only when every check passes. `metric_lower_bound` is shown with the run's estimate and interval, `regression_vs_baseline` with the paired difference.
+
+## Not measured
+
+A check you did not measure is recorded at a failing worst-case value, never as passing: `--flip-rate 1 --cost-ratio 9 --p95-latency-ms 99999`. The gate page marks such a check **not measured** and shows why. Name the reason with `--not-measured`:
+
+```bash title="Terminal"
+modelstill push gate history.jsonl <run> --task <task> --spec tasks/<task>/spec.yaml \
+  --previous <baseline-run> --flip-rate 1 --cost-ratio 9 --p95-latency-ms 99999 \
+  --not-measured "cost_ratio=the bill was not exported"
+```
+
+`--not-measured` is repeatable. It refuses a check that passed or that the gate does not have.
+
+## The gate report
+
+**Report** opens one gate as a page: highlights (each check with what was measured and what was needed), insights (a card per metric with its change against the baseline), links to the case-by-case comparison, the gated run and the review queue, and the sources it was built from.

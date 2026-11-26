@@ -1,0 +1,35 @@
+---
+title: Langfuse
+description: Read Langfuse generations through the public API into a ModelStill dataset.
+icon: FileArrowDown
+---
+
+```bash title="Terminal"
+export LANGFUSE_PUBLIC_KEY=pk-lf-your-key LANGFUSE_SECRET_KEY=sk-lf-your-key
+export LANGFUSE_HOST=https://langfuse.example.com
+modelstill ingest langfuse --from 2026-11-01T00:00:00Z --to 2026-11-24T00:00:00Z \
+  --name <observation-name> --out data/langfuse.jsonl
+```
+
+Keep the keys in your secret store and pass them through the environment, never on the command line. The reader only sends `GET` requests.
+
+| Flag | Meaning |
+|---|---|
+| `--from`, `--to` | ISO 8601 start and exclusive end, sent as `fromStartTime` and `toStartTime` |
+| `--name` | only observations with this name |
+| `--type` | observation type, default `GENERATION` |
+| `--host` | default `$LANGFUSE_HOST`, else `https://cloud.langfuse.com` |
+| `--api` | `v2` (default) or `v1` |
+| `--page-size` | observations per request, default 100 |
+| `--out` | the dataset JSONL to merge into |
+
+## How it reads
+
+- `v2` uses `GET /api/public/v2/observations` with cursor pagination and keeps asking until `meta.cursor` is absent, because v2 may return empty pages that still carry a cursor.
+- `v1` uses `GET /api/public/observations` with page numbers, for self-hosted Langfuse older than v2 observations.
+- Each output is keyed by the observation's `model`, or `langfuse:<name>` when that is empty.
+- An observation at level `ERROR` becomes an error output with its `statusMessage`.
+- `input` and `output` arrive as strings in v2 and are parsed as JSON when they are JSON.
+- Provenance keys are `trace_id` and `observation_id`.
+
+If you get a `400` mentioning `parseIoAsJson` or an unknown path, your Langfuse is older: add `--api v1`.

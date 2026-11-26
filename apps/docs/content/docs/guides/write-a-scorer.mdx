@@ -1,0 +1,117 @@
+---
+title: Write a scorer
+description: Score every case with exact match, set F1, JSON equality, your own function, an LLM judge or a pairwise judge, and let the library add the interval.
+icon: Function
+---
+
+A scorer is a function `(output, expected) -> float` between 0 and 1. It scores one case; `modelstill.evals.run` scores every case and adds the interval. You never compute an interval yourself.
+
+## Built-in scorers
+
+<Tabs items={["Exact match", "Set F1", "JSON equal"]}>
+
+```python tab="Exact match"
+from modelstill.evals import exact_match, run
+
+result = run(cases, model, exact_match)
+```
+
+```python tab="Set F1"
+from modelstill.evals import run, set_f1
+
+result = run(cases, model, set_f1)
+```
+
+```python tab="JSON equal"
+import json
+
+
+def json_equal(output, expected):
+    try:
+        return 1.0 if json.loads(output) == expected else 0.0
+    except ValueError:
+        return 0.0
+```
+
+</Tabs>
+
+- **Exact match** scores 1 when the output equals the expected answer. Binary scores get an exact Clopper-Pearson interval.
+- **Set F1** is F1 between the predicted and expected sets, for tags or extracted names. Two empty sets score 1. Fractional scores get a seeded bootstrap interval.
+- **JSON equal** parses the output and compares objects, so key order does not count. An answer that does not parse scores 0, so broken JSON never raises a score. It is built in for canaries (`canary.metric: {ref: json_equal}`) and as a GRPO reward (`--reward json_equal`); for an eval run, pass the function above.
+
+## Your own scorer
+
+Any function works. Keep it deterministic:
+
+```python title="scorers.py"
+def within_one_level(output: str, expected: str) -> float:
+    levels = ["low", "normal", "urgent"]
+    return 1.0 if abs(levels.index(output) - levels.index(expected)) <= 1 else 0.0
+```
+
+A case whose model call raises scores 0 and keeps the error, so failures lower the score instead of disappearing.
+
+## Several metrics per case
+
+Record named metrics next to the case score, so the Compare page can pair each one:
+
+```python title="record.py"
+from modelstill.benchmark import History, load_benchmark
+from modelstill.evals import exact_match, run, set_f1
+
+result = run(benchmark.cases, model, set_f1)
+case_metrics = {
+    scored.case_id: {"exact_match": exact_match(scored.output, case.expected)}
+    for scored, case in zip(result.scores, benchmark.cases)
+}
+History(path).record(benchmark, "model-v2", result, case_metrics=case_metrics)
+```
+
+## An LLM judge, checked against people
+
+`modelstill.judges.LLMJudge` asks a rubric judge for PASS or FAIL. The judge must never share a model family with a teacher; `JudgePanel` refuses that.
+
+```python title="judge.py"
+from modelstill.evals import judge_agreement
+from modelstill.judges import LLMJudge, corrected_score, stability
+
+judge = LLMJudge(model, family, instructions, complete)
+agreement = judge_agreement(judge_verdicts, human_labels)
+```
+
+`complete` is your function `(model, messages) -> str` that calls the judge model. `as_metric(judge)` turns the judge into a scorer for `run`.
+
+- `judge_agreement` gives accuracy with an exact interval, Cohen's kappa, false passes and false fails. To gate on kappa, add it to the gate decision as a check, as shown in [Use an LLM as a judge](/guides/llm-as-a-judge).
+- `stability` re-asks the judge and reports how often its verdict flips.
+- `corrected_score` combines many judge scores with a few human labels, so the judge's bias does not move the reported score.
+
+## A pairwise judge
+
+`modelstill.judges.PairwiseJudge` picks the better of two answers to the same input: A, B or TIE. It asks twice, once in each order, and keeps a verdict only when both orders agree. A verdict that follows the position becomes an inconsistent tie, so position bias cannot create wins.
+
+Compare two recorded runs:
+
+```bash title="Terminal"
+modelstill eval pairwise runs.jsonl <before> <after> --spec tasks/<task>/spec.yaml \
+  --base-url http://localhost:4000 --api-key-env LITELLM_API_KEY
+```
+
+The judge is the spec's `eval.judge`, or `--judge-model` and `--judge-family` with `--teacher-family` for each teacher. A judge from a teacher's family is refused. The judge sees each shared case's input and, when the history has it, the expected answer, and is called at temperature 0 through any OpenAI-compatible URL.
+
+It prints wins for each run, ties, the later run's win rate over decisive cases with an exact interval, a sign test, and the inconsistency rate with its own exact interval. A high inconsistency rate means the judge cannot tell the answers apart; trust the win rate less.
+
+As a scorer, `parity_metric` compares each output with the expected answer and scores 1 unless the expected answer wins in both orders:
+
+```python title="parity.py"
+from modelstill.evals import run
+from modelstill.judges import PairwiseJudge, parity_metric
+
+judge = PairwiseJudge(model, family, instructions, complete)
+result = run(cases, student, parity_metric(judge, teacher_families={"qwen", "openai"}))
+```
+
+`pairwise_compare(judge, cases, teacher_families=...)` gives the same numbers from Python, with every per-case verdict. See [Statistics](/reference/statistics) for how each number is computed.
+
+## From pytest
+
+If your evals are pytest tests, the [pytest plugin](/integrations/pytest) records them as a run with the same intervals.

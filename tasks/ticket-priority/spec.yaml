@@ -1,0 +1,35 @@
+task: ticket-priority
+version: 1
+instruction: prompts/system.md
+output_schema: schemas/out.json
+requirements:
+  - id: correct_priority
+    priority: p0
+    type: label
+    instruction: The priority is low, normal or urgent, as the ticket text supports it.
+labelling:
+  teachers:
+    - {model: openai/gpt-5-mini, family: openai}
+    - {model: anthropic/claude-haiku-4-5, family: anthropic}
+  disagreement: human_queue
+eval:
+  judge: {model: google/gemini-2.5-flash, family: google}
+  golden_set: data/golden.jsonl
+  gate:
+    metric: correct_priority
+    max_regression: 0.02
+    max_flip_rate: 0.01
+    max_cost_ratio: 0.6
+    max_p95_latency_ms: 2000
+train:
+  base: Qwen/Qwen3-1.7B
+  method: lora
+  lora_r: 16
+  seeds: [1, 2, 3]
+serve:
+  litellm_alias: ticket-priority
+  fallback: ticket-priority-cloud
+  target_error: 0.05
+monitor:
+  canary: data/canary.jsonl
+  replay_frac: 0.3

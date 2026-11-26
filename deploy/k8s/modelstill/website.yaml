@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: website
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: { app: website }
+  template:
+    metadata:
+      labels: { app: website }
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      imagePullSecrets: [{ name: ghcr }]
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: website
+          image: modelstill-website
+          env:
+            - { name: NODE_ENV, value: production }
+            - { name: NEXT_TELEMETRY_DISABLED, value: "1" }
+          ports:
+            - { name: http, containerPort: 4321 }
+          readinessProbe:
+            tcpSocket: { port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            tcpSocket: { port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { memory: 768Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: website
+spec:
+  selector: { app: website }
+  ports:
+    - { name: http, port: 4321, targetPort: http }

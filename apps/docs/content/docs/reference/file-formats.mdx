@@ -1,0 +1,73 @@
+---
+title: File formats
+description: The JSONL and YAML files ModelStill reads and writes - benchmarks, datasets, training data, calibration pairs, deployment files and monitor configs.
+icon: FileArrowDown
+---
+
+## Benchmark JSONL
+
+One case per line. `id` is a unique string.
+
+```json
+{"id": "t1", "input": "...", "expected": "...", "tags": ["optional"]}
+```
+
+## Dataset JSONL
+
+Written by `modelstill ingest`. Read by `push review`, `swap --records` and training-data builders.
+
+```json
+{"input_hash": "...", "input": [{"role": "user", "content": "..."}], "provenance": {"source": "langfuse", "keys": {"trace_id": "...", "observation_id": "..."}, "builder": "..."}, "outputs": {"<model>": {"output": "...", "error": null}}, "agreement": null, "review_state": "none", "final_output": null}
+```
+
+An output holds either an `output` or an `error`. `agreement`, `review_state` and `final_output` are filled in by labelling and review.
+
+## Training JSONL
+
+Chat rows. The loss covers only the assistant turn.
+
+```json
+{"messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}
+```
+
+For `--modality vision`, a message's content may be a list of parts: `{"type": "text", "text": "..."}` and `{"type": "image", "image": "data:image/png;base64,..."}`.
+
+## Calibration pairs
+
+For `modelstill serve calibrate`: one line per calibration item.
+
+```json
+{"confidence": 0.97, "correct": true}
+```
+
+## Deployment file
+
+Read by the LiteLLM plugin, written by `serve calibrate` and `watch check --fallback-deployment`.
+
+```yaml title="deployment.<task>.yaml"
+task: <task>
+mode: shadow
+student_model: <served-name>
+threshold: 0.93
+shadow_sample: 1.0
+```
+
+Every field is required. `mode` is `off`, `shadow` or `serve`; `threshold: null` makes `serve` defer everything. A bare `off`, which YAML reads as false, is read as `off`; a bare `on` is refused.
+
+When the plugin config has an `api` block and the API holds a deployment record for `task`, the record wins over this file; see [Serving modes](/concepts/serving-modes).
+
+## Plugin config
+
+Named by `MODELSTILL_LITELLM_CONFIG`. See [LiteLLM](/integrations/litellm).
+
+## Monitor config
+
+For `modelstill monitor` and `modelstill watch`. See [Monitor a task](/guides/monitor-a-task).
+
+## History JSONL
+
+Append-only rows of kind `run`, `accept` and `gate`. See [Benchmarks, datasets and history](/concepts/benchmarks-and-history).
+
+## Artifacts
+
+A training artifact is a folder at `<output-root>/<task>/<snapshot8>-<manifest8>-s<seed>`. It holds the weights or adapter, `artifact.json` (base, manifest, metrics), `attestation.json` (sha256, row count and row-hash root of the training and validation files, manifest digest, git commit) and `log_history.json`. Paths are never overwritten.

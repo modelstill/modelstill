@@ -1,0 +1,130 @@
+---
+title: Monitor a task
+description: Known-answer canaries, temperature-0 drift hashes and the endpoint watchdog that catches a silent model change behind an unchanged name.
+icon: Pulse
+---
+
+A cloud alias can change under you: the provider ships a new version, or the proxy routes to another deployment, and the response still carries the same model name. ModelStill watches the answers themselves.
+
+| Command | Checks | Calls per run |
+|---|---|---|
+| `modelstill monitor canary` | known-answer items, pass rate with an exact interval, regression against the previous run | `canary.limit` |
+| `modelstill monitor drift` | temperature-0 answers to fixed prompts, hashed and compared with the previous run | one per prompt |
+| `modelstill watch baseline` | records the approval-day baseline: canary plus repeated, log-prob-carrying answers | canary plus `repeats` per prompt |
+| `modelstill watch check` | today against that baseline | canary plus one per prompt |
+
+## Monitor config
+
+```yaml title="monitor.yaml"
+task: ticket-priority
+target: {base_url: http://localhost:4000, model: ticket-priority, api_key_env: MODELSTILL_LITELLM_KEY}
+provider: litellm:ticket-priority
+params: {temperature: 0, max_tokens: 200, response_format: {type: json_object}}
+state_dir: state
+clickhouse: {url: http://clickhouse:8123, user: modelstill_writer, password_env: CLICKHOUSE_PASSWORD}
+alerts: {log: true, discord_env: MODELSTILL_DISCORD_WEBHOOK}
+canary:
+  benchmark: canary.jsonl
+  limit: 10
+  metric: {ref: json_equal}
+  pass_at: 0.8
+  floor: 0.5
+drift:
+  prompts: drift.jsonl
+```
+
+- `request` and `canary.metric` are built-ins (`messages`; `exact_match`, `json_equal`) or `module:attribute`, called with `args` when given.
+- `state_dir` keeps previous runs as JSONL: put it on a persistent volume.
+- The Discord webhook URL comes only from the environment variable named in `discord_env`. If it is named but unset, the command fails before calling the target.
+
+## Canary and drift
+
+```bash title="Terminal"
+modelstill monitor canary monitor.yaml --fail-on-alert
+modelstill monitor drift monitor.yaml --fail-on-alert
+```
+
+- **Canary:** `canary_below_floor` when the pass-rate interval's upper bound is below `floor`; `canary_regression` when the paired comparison with the previous run on the same items says worse.
+- **Drift:** any changed temperature-0 answer raises `provider_drift`. Failed calls are listed but never counted as changes.
+
+## The endpoint watchdog
+
+`watch` compares every check with the baseline recorded on the day you approved the endpoint, not with the previous run, so a slow drift cannot hide.
+
+```yaml title="watch.yaml"
+task: ticket-priority
+target: {base_url: http://localhost:4000, model: ticket-priority, api_key_env: MODELSTILL_LITELLM_KEY}
+state_dir: state
+alerts: {log: true}
+canary: {benchmark: canary.jsonl, floor: 0.5}
+watch:
+  prompts: watch.jsonl
+  limit: 30
+  repeats: 2
+  logprobs: true
+  top_logprobs: 5
+  max_tokens: 16
+  alpha: 0.01
+  critical_shift: 0.25
+  max_changed: 0.1
+  rounds: 10000
+```
+
+```bash title="Terminal"
+modelstill watch baseline watch.yaml
+modelstill watch check watch.yaml --fail-on-alert --fallback-deployment deployment.ticket-priority.yaml
+```
+
+The baseline is never replaced without `--replace`. A changed prompt file or canary benchmark refuses to check: record a new baseline.
+
+| Alert | Level |
+|---|---|
+| `watch_canary_below_floor` | critical |
+| `watch_canary_regression`: exact McNemar p below `alpha` and more broke than got fixed | critical |
+| `watch_logprob_shift`: sign-flip test p below `alpha` | warn; critical when the excess shift reaches `critical_shift` |
+| `watch_answers_changed`: share of stable prompts with a new answer above `max_changed` | warn; info below it |
+| `watch_served_model_changed`: the reply's `model` was not seen at baseline | warn |
+| `watch_fallback`: the deployment file was set to `mode: "off"` | critical |
+
+On critical, `--fallback-deployment` writes `mode: "off"` to the deployment file atomically, keeping every other setting, and the plugin picks it up within its reload interval. When the command is connected to the API (below), it also sets the task's API deployment record to `off`, because a plugin that follows the API serves that record; the result is printed on stderr. `--fail-on-alert` exits 2 on warn or critical, not on info.
+
+The defaults for `alpha`, `critical_shift` and `max_changed` are starting points, not measured values. Revisit them after a month of checks.
+
+## Run on a schedule
+
+One Kubernetes CronJob per command and task is a reasonable start: an hourly canary and a daily drift or watch check.
+
+```yaml title="cronjob.yaml"
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: ticket-priority-canary}
+spec:
+  schedule: "17 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: canary
+              image: <modelstill image>
+              args: ["modelstill", "monitor", "canary", "/config/monitor.yaml"]
+              envFrom: [{secretRef: {name: modelstill-monitor}}]
+              volumeMounts: [{name: state, mountPath: /config/state}]
+```
+
+Results go to ClickHouse (`modelstill.canary_runs`, `modelstill.canary_results`, `modelstill.watch_runs`) when configured, and to JSONL in `state_dir` always. Exit codes: `0` done, `1` config or store error, `2` an alert fired with `--fail-on-alert`.
+
+## Send results to the dashboard
+
+Set `MODELSTILL_API_URL` and `MODELSTILL_API_TOKEN` (a write API key) in the job's environment, or pass `--api URL`, and `monitor canary`, `monitor drift` and `watch check` also push to the API. The dashboard's [Monitoring](/dashboard/monitoring) page then shows them.
+
+| Run | Sent to the API |
+|---|---|
+| `monitor canary` | one canary run: provider, items passed of total, and the exact interval |
+| `watch check` with a `canary` section | one canary run from the check |
+| any alert from canary, drift or watch | one alert: kind, severity (the alert level), and a payload with the message and details |
+
+Register the task first with `modelstill push task`. Records are sent once at the end of each run, in batches. The push is best effort: an unreachable API never fails the run or changes its exit code. Unsent records wait in `state_dir/api-outbox.jsonl` and go out with the next run, and every record has an id, so a resend never duplicates it. `--no-api` keeps a run local.

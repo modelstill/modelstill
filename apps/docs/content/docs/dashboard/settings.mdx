@@ -1,0 +1,23 @@
+---
+title: Settings
+description: Task settings and versions, your profile, and the Connect via MCP page.
+icon: Gear
+---
+
+## Task settings
+
+**Settings > General** inside a task shows its slug, current version, snapshot hash and the routing summary, and a table of every version with its snapshot hash, git commit and creation time. Nothing is edited here: push a new version from the CLI.
+
+```bash title="Terminal"
+modelstill push task tasks/<task>/spec.yaml
+```
+
+`push task` registers the spec under its `task` name (or `--task`) with the commit it came from (`--git-sha`, default `git rev-parse HEAD`). The new version becomes current.
+
+## Profile
+
+**Settings > Profile** holds your name, which you can change, and the email you sign in with, which you cannot. **Sign out** ends the session in this browser; API keys keep working.
+
+## Connect via MCP
+
+**Settings > Connect via MCP** shows the MCP server URL and copyable setup for Claude Code, a project `.mcp.json` and Cursor. See [MCP server](/ai-agents/mcp).

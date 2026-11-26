@@ -1,0 +1,53 @@
+---
+title: Tasks and overview
+description: The task list, a task's overview page, the sidebar and the keyboard shortcuts of the ModelStill dashboard.
+icon: SquaresFour
+---
+
+The dashboard is a Next.js app that reads the ModelStill API. Run it locally with `bun run dev` in `apps/website`; it listens on `http://localhost:4323`. It uses the light theme.
+
+## Sign-in and onboarding
+
+You sign in with an emailed one-time code (see [Authentication](/authentication)). After the first sign-in, onboarding walks through six short steps: about you, your first task, an API key, connecting a coding agent, your data, and done. **Skip setup** ends it at any step. **Get started** in the sidebar keeps a checklist: define a task, import production history, review cases, gate and serve the student.
+
+## The task list
+
+**Tasks** lists every task with its version, snapshot hash, serving mode, deferral share and last gate result. Three widgets sit above it: serving modes, gate outcomes and deferral share per task. Click a row to open the task.
+
+A task appears once you register it:
+
+```bash title="Terminal"
+modelstill push task tasks/<task>/spec.yaml
+```
+
+## A task's overview
+
+The overview shows the mode, the version and the snapshot hash, and suggests the next step. It has widgets for pass rate, deferral share, cost, student latency, review progress and gate outcomes, the latest gate with its checks, and the five newest training runs.
+
+## Sidebar
+
+Inside a task the sidebar groups the pages by what you are doing:
+
+| Group | Pages |
+|---|---|
+| Overview | [Overview](/dashboard/tasks) |
+| Observe | [Traffic](/dashboard/traffic), [Monitoring](/dashboard/monitoring) |
+| Evaluate | [Evals](/dashboard/evals), [Review](/dashboard/review), [Datasets](/dashboard/datasets), [Gates](/dashboard/gates) |
+| Improve | [Training](/dashboard/training), [Deployment](/dashboard/deployment) |
+
+The **Settings** tab holds the task's general settings, your profile, API keys and **Connect via MCP**.
+
+## Empty pages
+
+Pages with no data yet show the CLI command that fills them and what you will see afterwards. The dashboard only reads most data: you push it with the CLI.
+
+## Keyboard shortcuts
+
+| Keys | Action |
+|---|---|
+| `⌘K` | search pages, tasks, settings and actions |
+| `?` | show all shortcuts |
+| `[` | collapse or expand the sidebar |
+| `G` then `L` | task list |
+| `G` then `S` | settings |
+| `J` / `K` | next or previous row on Review and Compare |

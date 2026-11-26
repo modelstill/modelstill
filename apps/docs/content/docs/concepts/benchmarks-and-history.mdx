@@ -1,0 +1,63 @@
+---
+title: Benchmarks, datasets and history
+description: The three kinds of file ModelStill reads and writes - benchmark cases, datasets of recorded calls, and the run history - and how versions tie them together.
+icon: Database
+---
+
+## Benchmarks
+
+A benchmark is a JSONL file of cases. Each case has a unique string `id`, an `input`, an `expected` answer and optional `tags`.
+
+```json title="golden.jsonl"
+{"id": "t1", "input": "The checkout page returns 500 for every customer.", "expected": "urgent", "tags": ["outage"]}
+```
+
+The benchmark's **version** is a SHA-256 hash of every case's id, input, expected answer and tags. Change one case and the version changes. Two runs are only paired, compared or gated against each other when they ran on the same version, so a comparison never mixes different sets.
+
+## Datasets
+
+A dataset is JSONL of recorded calls, written by `modelstill ingest`. Each row holds:
+
+- `input`: the prompt, as chat messages when the source has them;
+- `outputs`: answers keyed by the model that gave them, or an error;
+- `provenance`: the source name and its own ids.
+
+Rows with the same input are merged, so answers from different models line up for labelling and comparison. Running an ingest again merges new answers into the same file.
+
+Datasets feed labelling (`modelstill push review`), model swaps (`modelstill swap --records`) and training data.
+
+## Case datasets in the dashboard
+
+The dashboard also keeps **case datasets**: named, versioned benchmark cases you can create, import from CSV or JSONL, edit and export. Every change makes a new version; nothing is overwritten. An exported version is benchmark JSONL with the same version hash that `load_benchmark` computes. See [Datasets](/dashboard/datasets).
+
+## The run history
+
+The history file (for example `history.jsonl`) is an append-only log. It holds three kinds of row:
+
+| `kind` | Written by | Holds |
+|---|---|---|
+| `run` | `History.record`, `modelstill import`, the pytest plugin, `modelstill swap` | model, benchmark name and version, per-case scores, outputs, inputs, expected answers, named metrics with intervals |
+| `accept` | `modelstill eval accept`, `import --accept` | which run is the accepted baseline |
+| `gate` | `import --gate`, the pytest plugin's `--modelstill-gate` | a gate decision with every threshold and measured value |
+
+```bash title="Terminal"
+modelstill eval runs history.jsonl
+modelstill eval accept history.jsonl <run>
+```
+
+The accepted baseline for a gate is the latest accepted run of the same benchmark version. Run ids may be given as a unique prefix.
+
+## Recording a run from Python
+
+```python title="record.py"
+from pathlib import Path
+
+from modelstill.benchmark import History, load_benchmark
+from modelstill.evals import run, set_f1
+
+benchmark = load_benchmark(Path("golden.jsonl"))
+result = run(benchmark.cases, my_model, set_f1)
+History(Path("history.jsonl")).record(benchmark, "my-model-v2", result)
+```
+
+`run` calls the model on every case. A case that raises scores 0 and keeps the error. The result holds the mean and its interval. See [Statistics](/reference/statistics).

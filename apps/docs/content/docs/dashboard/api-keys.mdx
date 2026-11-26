@@ -1,0 +1,25 @@
+---
+title: API keys
+description: Create, find and revoke the ms_live_ keys that scripts, CI and MCP clients use.
+icon: Key
+---
+
+**Settings > API keys** lists your keys with their status, permissions, creation date and when each was last used. Search by name and filter by permission.
+
+## Create a key
+
+1. Press **Create API key**.
+2. Name it (for example `laptop`, `ci` or `training-box`) and choose **Read only** or **Read and write**.
+3. Review and create. Copy the key on the last step: it is shown once and stored hashed. Keys do not expire.
+
+Keys start with `ms_live_`. Send one as `Authorization: Bearer ms_live_...` or `x-api-key: ms_live_...`. A read key can call every `GET` route; a write key can also write.
+
+The **Base URL and permissions** tab shows the API's base URL and what each permission allows.
+
+## Revoke a key
+
+Press **Revoke** on its row and confirm. The key stops working at once. Revoking keys does not sign you out.
+
+To revoke several keys, tick the checkbox on each row, or the header checkbox to select every key on the current page. Press **Revoke N keys** in the bar above the table. A dialog names every selected key and asks you to confirm before anything is revoked. A key that fails to revoke stays selected and is named in an error message, so you can try again. **Clear** empties the selection.
+
+See [Authentication](/authentication) for the other credentials.

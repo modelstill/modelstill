@@ -1,0 +1,43 @@
+{
+  "name": "@modelstill/docs",
+  "license": "Apache-2.0",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync:openapi": "bun run scripts/sync-openapi.ts",
+    "dev": "bun run sync:openapi && fumadocs-mdx && next dev -p 4324",
+    "build": "bun run sync:openapi && fumadocs-mdx && next build",
+    "start": "next start -p 4324",
+    "build:static": "DOCS_STATIC_EXPORT=1 NEXT_PUBLIC_DOCS_URL=https://docs.modelstill.com bun run build",
+    "deploy": "bun run build:static && cf deploy out",
+    "typecheck": "fumadocs-mdx && tsc --noEmit --incremental false",
+    "test": "bun test --timeout 15000",
+    "cleanup": "rimraf node_modules .next .source .turbo"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
+    "fumadocs-core": "16.10.4",
+    "fumadocs-mdx": "15.0.12",
+    "fumadocs-openapi": "11.0.2",
+    "fumadocs-ui": "16.10.4",
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.0",
+    "@modelstill/api": "workspace:*",
+    "@modelstill/mcp": "workspace:*",
+    "@tailwindcss/postcss": "4.3.1",
+    "@types/bun": "1.2.8",
+    "@types/mdx": "2.0.14",
+    "@types/node": "22.15.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "cf": "1.0.0-rc.5",
+    "rimraf": "6.0.1",
+    "tailwindcss": "4.3.1",
+    "typescript": "5.8.2"
+  }
+}

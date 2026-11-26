@@ -1,0 +1,20 @@
+---
+title: Deployment and traffic
+description: Read and set a task's deployment record, and read its hourly serving traffic.
+icon: CloudArrowUp
+full: true
+_openapi:
+  preload:
+    - ./openapi.json
+---
+
+export default function Layout(props) {
+  const { APIPage, OpenAPIPage } = props.components ?? {};
+  const Comp = OpenAPIPage ?? APIPage;
+  return (
+    <>
+      {props.children}
+      <Comp document="./openapi.json" operations={[{ path: "/v1/tasks/{slug}/deployment", method: "get" }, { path: "/v1/tasks/{slug}/deployment", method: "put" }, { path: "/v1/tasks/{slug}/traffic", method: "get" }]} />
+    </>
+  );
+}

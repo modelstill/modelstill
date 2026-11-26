@@ -1,0 +1,20 @@
+---
+title: Canaries and alerts
+description: Read a task's canary runs and alerts, and record new ones.
+icon: Pulse
+full: true
+_openapi:
+  preload:
+    - ./openapi.json
+---
+
+export default function Layout(props) {
+  const { APIPage, OpenAPIPage } = props.components ?? {};
+  const Comp = OpenAPIPage ?? APIPage;
+  return (
+    <>
+      {props.children}
+      <Comp document="./openapi.json" operations={[{ path: "/v1/tasks/{slug}/canaries", method: "get" }, { path: "/v1/tasks/{slug}/canaries", method: "post" }, { path: "/v1/tasks/{slug}/alerts", method: "get" }, { path: "/v1/tasks/{slug}/alerts", method: "post" }]} />
+    </>
+  );
+}

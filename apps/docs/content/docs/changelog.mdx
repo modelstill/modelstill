@@ -1,0 +1,46 @@
+---
+title: Changelog
+description: What changed in ModelStill, summarised by day from the repository history.
+icon: ClockCounterClockwise
+---
+
+ModelStill has no tagged release yet. The package version is `0.1.0`. This page summarises the repository history by day.
+
+## 25 November 2026
+
+- **Dashboard:** a gate report page, a training run page with quickstart, export and specification sections, metric widgets on the task list and task overview, and a design pass over tables, buttons and rows (Inter, 32 px buttons, 40 px rows).
+- **Datasets:** dataset changes are signed with the editor's email. ADR 0019 records the design of versioned case datasets.
+- **Charts:** histograms show every tick and no longer clip three-digit counts.
+- **Braintrust:** `modelstill ingest braintrust` reads project logs and datasets, and `modelstill import braintrust` records experiments as runs, from an export file or the REST API.
+- **Pairwise judge:** `modelstill eval pairwise` and `PairwiseJudge` pick the better of two answers in both orders, with an exact win-rate interval, a sign test and the inconsistency rate.
+- **Serving:** with an `api` block in its config, the LiteLLM plugin polls the task's API deployment record and applies mode, threshold and shadow-sample changes; the deployment file stays the bootstrap and the fallback.
+- **Monitoring:** `monitor canary`, `monitor drift` and `watch check` push canary runs and alerts to the API (`POST /v1/tasks/{slug}/canaries` and `/alerts`), which fills the Monitoring page.
+- **`push gate`** exits 2 when the recorded gate failed, like `report gate`.
+
+## 24 November 2026
+
+- **Case datasets and requests:** versioned case datasets in the API and the dashboard (create, CSV and JSONL import, edit, delete, export), and a paged list of individual serving requests.
+- **Eval run pages:** a run page with histograms and paged cases; improved and regressed counts per metric; a paired comparison with per-metric intervals and a case diff.
+- **`modelstill swap`:** decide a model or provider swap on recorded calls without a gold set, including recorded mode against stored answers.
+- **`modelstill watch`:** baseline an endpoint and catch silent model changes with a canary McNemar test and a log-prob sign-flip test.
+- **Ingest and import:** Langfuse, OpenTelemetry GenAI spans, LiteLLM spend logs and any JSONL into datasets; DeepEval, Inspect and Promptfoo results into runs; the pytest plugin.
+- **CI gate:** `modelstill report gate` and the `modelstill-gate` GitHub Action with a sticky pull-request comment; `modelstill setup` for coding agents.
+- **`push run`** sends case inputs, expected answers and per-case metrics; **`push gate`** records checks that were not measured, with a reason.
+- **Auth:** email-code sign-in, `ms_live_` API keys with read or write permission, and MCP OAuth on every `/v1` route; onboarding after the first sign-in.
+- **MCP server:** fourteen tools over the API on Streamable HTTP, with API-key and OAuth sign-in.
+- **Training:** on-policy distillation, the GRPO family with task-metric rewards, full-weight SFT, 4-bit QLoRA, vision-language SFT, resume from checkpoint, training on an SSH GPU host, training-data attestation, PEFT, merged and GGUF export, `modelstill sample`, and the training console with live curves.
+- **Serving:** the gateway became a LiteLLM custom provider instead of a separate server (ADR 0007).
+- **Brand:** the ModelStill mark and the petrol cyan accent; light theme by default.
+- **Deployment:** Dockerfiles, Kubernetes manifests, an Argo Application and CI workflows. Nothing is deployed yet.
+
+## 23 November 2026
+
+- **Library first** (ADR 0001): the engine moved to `python/modelstill`.
+- **Specs:** the task spec and `modelstill spec validate` and `spec hash`.
+- **Evals:** metrics, run summaries with exact and bootstrap intervals, paired comparison, pooled F1, versioned benchmark files and run history with `eval runs`, `compare` and `accept`.
+- **Judges:** cross-family panels, LLM judges, stability and prediction-powered correction.
+- **Gates:** relative to the accepted baseline with `max_regression` (ADR 0003).
+- **Data:** dataset items with provenance, two-teacher labelling and splits.
+- **Training:** plans with frozen manifests and immutable artifact paths, a TRL LoRA backend, and training and serving on Modal with a dry run and a spend cap.
+- **Serving and monitoring:** off, shadow and serve routing with confidence deferral, event sinks, `serve calibrate`, canaries, drift checks and alert sinks.
+- **API and dashboard:** the first API with Postgres and ClickHouse stores, write endpoints for `modelstill push`, and the dashboard screens for tasks, evals, compare, gates, review and traffic, built on the shared UI package with Phosphor icons.

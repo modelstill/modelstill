@@ -1,0 +1,38 @@
+---
+title: Measure a noise floor
+description: How often a model disagrees with its own earlier answers, why that bounds every agreement score, and how ModelStill measures it.
+icon: Scales
+---
+
+Ask the same model the same question twice and the answers do not always match, even at temperature 0. That self-agreement is the **noise floor**. A candidate that agrees with today's model 92% of the time sounds poor, until you learn that today's model agrees with itself only 93% of the time.
+
+ModelStill measures the floor before it judges a candidate, and compares the candidate with the floor, not with 100%.
+
+## Measure it live
+
+`modelstill swap` asks the current model every record `--repeats` times (at least 2). Its first answers are the reference; each later run is scored against them with the task's metric. That score is the floor.
+
+```bash title="Terminal"
+modelstill swap tasks/<task>/spec.yaml --records data/records.jsonl \
+  --current <current-model> --candidate <candidate-model> \
+  --base-url http://localhost:4000 --sample 300 --repeats 2 --out swap.json
+```
+
+The candidate answers once and is scored against the same reference with the same metric, so candidate and floor are paired record by record. The **gap** is a paired bootstrap of the per-record differences, with fixed and broken counts.
+
+## Without calling the current model
+
+With `--current recorded`, the stored production answers are the reference and the current model is never called. The floor then comes from, in order:
+
+1. `--self-agreement VALUE` or `VALUE,LOW,HIGH`: a figure you measured before. The gap is unpaired.
+2. Records that also hold a repeated recorded answer under `--repeat-key` (default `<teacher>_repeat`). The gap is paired on those records.
+3. Otherwise the floor is reported as `not measured`. No floor is assumed, and only `agreement_lower_bound >= 1 - margin` can decide `switch`.
+
+## Read it
+
+The report gives the floor with its interval (exact for 0/1 scores, bootstrap otherwise). History gets one run for the current model with metric `self_agreement`, and one run per candidate with `agreement`, `self_agreement` and `agreement_gap`.
+
+## Limits
+
+- At temperature 0 a deterministic model's floor is close to 1, so the margin carries the decision. Use the production temperature (`--temperature`) when callers sample.
+- Agreement with today's model is not correctness. A candidate that fixes today's mistakes shows up as disagreement. Read the broken records, or score both on a gold set with the gate.

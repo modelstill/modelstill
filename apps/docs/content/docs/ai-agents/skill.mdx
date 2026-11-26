@@ -1,0 +1,37 @@
+---
+title: The bundled agent skill
+description: The SKILL.md that ships inside the Python package and teaches a coding agent how to use ModelStill correctly.
+icon: Sparkle
+---
+
+The `modelstill` package ships an agent skill at `modelstill/skills/modelstill/SKILL.md`. It tells a coding agent (Claude Code, Codex, Cursor) what ModelStill does, in what order, and which commands to run, so the agent does not invent flags.
+
+## What it covers
+
+- task specs, `spec validate` and `spec hash`;
+- benchmarks, `eval runs`, `eval compare`, `eval accept`, `eval pairwise`;
+- ingesting Langfuse, Braintrust, OpenTelemetry, LiteLLM and JSONL traces, and importing DeepEval, Inspect, Promptfoo and Braintrust results;
+- the pytest plugin;
+- the release gate, the CI gate action and the rule that unmeasured checks are recorded as failing;
+- model and provider swaps without a gold set;
+- training students on a local GPU, an SSH host or Modal, attestation and export;
+- serving with vLLM, the LiteLLM plugin's off, shadow and serve modes, the deferral threshold;
+- canaries, drift checks and the endpoint watchdog.
+
+Its first rule: every number comes with an interval. Never present a single score as the result.
+
+## Install it for your agent
+
+Run these with the Python that has `modelstill` installed:
+
+```bash title="Terminal"
+python -m modelstill.skill
+python -m modelstill.skill --install
+python -m modelstill.skill --install --dest .claude/skills
+```
+
+Without flags it prints where the bundled skill folder is. `--install` copies it into `--dest`, by default `~/.claude/skills`, replacing an older copy. The skill is also what `modelstill setup` points the agent at: see [Set up with your agent](/ai-agents/setup).
+
+## Kept honest by tests
+
+The repository's tests check that every command and the action path the skill names exist, so the skill cannot drift from the CLI.

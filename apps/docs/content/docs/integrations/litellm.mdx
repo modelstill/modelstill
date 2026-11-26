@@ -1,0 +1,49 @@
+---
+title: LiteLLM
+description: The three ways ModelStill works with a LiteLLM proxy - serving through the plugin, ingesting spend logs, and replaying calls for a model swap.
+icon: PlugsConnected
+---
+
+ModelStill is built around a LiteLLM proxy that already sits between your application and the providers. It pins `litellm==1.101.0`.
+
+## Serve through the plugin
+
+The `modelstill/<task>` custom provider routes a task's calls between the student and the cloud model. See [Serve with the LiteLLM plugin](/guides/serve-with-litellm).
+
+| Plugin config key | Default | Meaning |
+|---|---|---|
+| `reload_seconds` | 30 | how often deployment files and the API record are re-read |
+| `api.url` | | optional; the ModelStill API whose deployment record wins over the file while it answers |
+| `api.token_env` / `api.token_file` | | where the API key comes from (the variable is checked first) |
+| `api.timeout` | 2 | seconds per poll |
+| `tasks.<task>.deployment` | | the deployment file: the bootstrap, and the fallback when the API has no record or is down |
+| `tasks.<task>.confidence` | `exp_mean_logprob` | or `min_token_prob` |
+| `tasks.<task>.student.base_url` | | OpenAI-compatible student server, without `/v1` |
+| `tasks.<task>.student.model` | | optional model name to request |
+| `tasks.<task>.student.api_key_env` / `api_key_file` | | where the student key comes from |
+| `tasks.<task>.student.timeout` | 60 | seconds |
+| `tasks.<task>.cloud_model` | | a model name in the same proxy |
+| `sinks.clickhouse` | | `url`, `table` (default `modelstill.serving_events`), `user`, `password_env` |
+| `sinks.jsonl` | | a local JSONL file of events |
+| `sinks.max_queue`, `batch_size`, `flush_seconds` | 10000, 200, 1 | the write queue |
+
+## Ingest spend logs
+
+```bash title="Terminal"
+modelstill ingest litellm spend_logs.csv --out data/litellm.jsonl
+```
+
+Reads `LiteLLM_SpendLogs` rows as a CSV export, a JSON array, an object with `data` or `logs`, or JSON lines.
+
+- LiteLLM stores prompts only when `general_settings.store_prompts_in_spend_logs` is true. Rows without a prompt are skipped.
+- The answer is `response.choices[0].message.content`.
+- Rows with `status: failure` become errors.
+- Outputs are keyed by `model`, the deployment that answered. `--model-field model_group` keys them by the public alias.
+
+## Replay through the proxy
+
+`modelstill swap --base-url http://localhost:4000` sends candidate calls through the proxy, reads prices from `--litellm-config`, and ends with the `model_list` change for the chosen candidate. See [Check a model swap](/guides/model-swap).
+
+## Monitor an alias
+
+A LiteLLM alias reports the alias, not the upstream model, so a provider swap behind it is invisible in the response. `modelstill monitor drift` and `modelstill watch` catch it from the answers themselves. See [Monitor a task](/guides/monitor-a-task).

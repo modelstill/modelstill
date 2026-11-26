@@ -1,0 +1,23 @@
+{
+  "title": "Guides",
+  "icon": "BookOpen",
+  "root": true,
+  "pages": [
+    "index",
+    "---Evaluate---",
+    "write-a-scorer",
+    "llm-as-a-judge",
+    "import-traces",
+    "golden-dataset",
+    "noise-floor",
+    "---Decide---",
+    "ci-gate",
+    "model-swap",
+    "---Train and serve---",
+    "distil-a-task",
+    "train-on-a-gpu-host",
+    "train-on-modal",
+    "serve-with-litellm",
+    "monitor-a-task"
+  ]
+}

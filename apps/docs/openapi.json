@@ -1,0 +1,5370 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ModelStill API",
+    "version": "0.1.0"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An API key (ms_live_...), an MCP OAuth access token, or the admin token"
+      },
+      "apiKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key"
+      },
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "better-auth.session_token"
+      }
+    },
+    "schemas": {
+      "DatasetVersion": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer"
+          },
+          "hash": {
+            "type": "string",
+            "description": "sha256 of the rows in the form python's Benchmark.version hashes them"
+          },
+          "parent": {
+            "type": "integer",
+            "nullable": true
+          },
+          "rowCount": {
+            "type": "integer"
+          },
+          "change": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "create",
+                  "import",
+                  "add",
+                  "edit",
+                  "delete"
+                ]
+              },
+              "rowIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "kind",
+              "rowIds"
+            ]
+          },
+          "author": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "hash",
+          "parent",
+          "rowCount",
+          "change",
+          "author",
+          "createdAt"
+        ]
+      },
+      "DatasetSummary": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "head": {
+            "$ref": "#/components/schemas/DatasetVersion"
+          }
+        },
+        "required": [
+          "name",
+          "createdAt",
+          "head"
+        ]
+      },
+      "DatasetError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "head": {
+            "type": "integer"
+          },
+          "duplicates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "index",
+                "id"
+              ]
+            }
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "nullable": true
+            }
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "DatasetRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "input": {
+            "nullable": true
+          },
+          "expected": {
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "version": {
+            "type": "integer",
+            "description": "The dataset version that wrote this row as it is now"
+          },
+          "position": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "metadata",
+          "version",
+          "position"
+        ]
+      },
+      "DatasetSnapshot": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "head": {
+            "type": "integer"
+          },
+          "version": {
+            "$ref": "#/components/schemas/DatasetVersion"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatasetRow"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "head",
+          "version",
+          "rows"
+        ]
+      },
+      "NewCase": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "input": {},
+          "expected": {
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          }
+        },
+        "required": [
+          "input"
+        ]
+      },
+      "DatasetCreate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewCase"
+            },
+            "maxItems": 10000,
+            "default": []
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "DatasetWrite": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "$ref": "#/components/schemas/DatasetVersion"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatasetRow"
+            }
+          }
+        },
+        "required": [
+          "version",
+          "rows"
+        ]
+      },
+      "RowsAppend": {
+        "type": "object",
+        "properties": {
+          "baseVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "import",
+              "add"
+            ],
+            "default": "add"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewCase"
+            },
+            "minItems": 1,
+            "maxItems": 10000
+          }
+        },
+        "required": [
+          "rows"
+        ]
+      },
+      "RowPatch": {
+        "type": "object",
+        "properties": {
+          "baseVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "input": {
+            "nullable": true
+          },
+          "expected": {
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          }
+        },
+        "required": [
+          "baseVersion"
+        ]
+      },
+      "RowRevision": {
+        "type": "object",
+        "properties": {
+          "rowId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "input": {
+            "nullable": true
+          },
+          "expected": {
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "author": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "rowId",
+          "version",
+          "deleted",
+          "metadata",
+          "author",
+          "createdAt"
+        ]
+      },
+      "ServedRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ts": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string"
+          },
+          "deploymentId": {
+            "type": "string"
+          },
+          "requestHash": {
+            "type": "string",
+            "description": "sha256 prefix of the request messages; the messages themselves are not stored"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "servedFrom": {
+            "type": "string"
+          },
+          "deferred": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "confidence": {
+            "type": "number",
+            "nullable": true
+          },
+          "answeredBy": {
+            "type": "string",
+            "nullable": true,
+            "description": "The model whose answer the caller received"
+          },
+          "studentModel": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelMatch": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "studentOutput": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudModel": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudOutput": {
+            "type": "string",
+            "nullable": true
+          },
+          "latencyMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "studentMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "cloudMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "costUsd": {
+            "type": "number",
+            "nullable": true
+          },
+          "studentCostUsd": {
+            "type": "number",
+            "nullable": true
+          },
+          "cloudCostUsd": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "task",
+          "deploymentId",
+          "requestHash",
+          "mode",
+          "servedFrom",
+          "deferred",
+          "reason",
+          "confidence",
+          "answeredBy",
+          "studentModel",
+          "modelMatch",
+          "studentOutput",
+          "cloudModel",
+          "cloudOutput",
+          "latencyMs",
+          "studentMs",
+          "cloudMs",
+          "costUsd",
+          "studentCostUsd",
+          "cloudCostUsd"
+        ]
+      },
+      "CreatedApiKey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "key": {
+            "type": "string",
+            "description": "The full key, shown once; it starts with ms_live_"
+          },
+          "start": {
+            "type": "string",
+            "nullable": true
+          },
+          "permission": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "key",
+          "start",
+          "permission",
+          "createdAt"
+        ]
+      },
+      "BadRequest": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "message",
+                "path"
+              ]
+            }
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "Unauthorized": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "unauthorized"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "Forbidden": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "forbidden"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "ApiKeyCreate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "permission": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "permission"
+        ]
+      },
+      "TaskSummary": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "snapshotHash": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "shadow",
+              "serve"
+            ]
+          },
+          "deferralShare": {
+            "type": "number",
+            "nullable": true
+          },
+          "lastGatePassed": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "required": [
+          "slug",
+          "version",
+          "snapshotHash",
+          "mode",
+          "deferralShare",
+          "lastGatePassed"
+        ]
+      },
+      "NotFound": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "not_found"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "TaskVersion": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "snapshotHash": {
+            "type": "string"
+          },
+          "gitSha": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "snapshotHash",
+          "gitSha",
+          "createdAt"
+        ]
+      },
+      "GateCheck": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "number"
+          },
+          "value": {
+            "type": "number"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "estimate": {
+            "type": "number",
+            "nullable": true,
+            "description": "The point estimate the checked value was read from"
+          },
+          "low": {
+            "type": "number",
+            "nullable": true,
+            "description": "Lower end of the estimate's 95% interval"
+          },
+          "high": {
+            "type": "number",
+            "nullable": true,
+            "description": "Upper end of the estimate's 95% interval"
+          },
+          "measured": {
+            "type": "boolean",
+            "description": "False when the check was recorded at a failing worst-case value"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Why the check was not measured"
+          }
+        },
+        "required": [
+          "name",
+          "threshold",
+          "value",
+          "passed",
+          "estimate",
+          "low",
+          "high",
+          "measured",
+          "reason"
+        ]
+      },
+      "MetricChange": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "improved": {
+            "type": "integer"
+          },
+          "regressed": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "improved",
+          "regressed"
+        ]
+      },
+      "GateRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "taskSlug": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GateCheck"
+            }
+          },
+          "evalRunId": {
+            "type": "string",
+            "nullable": true
+          },
+          "previousEvalRunId": {
+            "type": "string",
+            "nullable": true
+          },
+          "changes": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/MetricChange"
+            },
+            "description": "Cases that improved or regressed against the baseline run, for the case score and each paired metric; null without a baseline"
+          }
+        },
+        "required": [
+          "id",
+          "taskSlug",
+          "createdAt",
+          "passed",
+          "checks",
+          "evalRunId",
+          "previousEvalRunId",
+          "changes"
+        ]
+      },
+      "Metric": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "number"
+          },
+          "low": {
+            "type": "number"
+          },
+          "high": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "value",
+          "low",
+          "high"
+        ]
+      },
+      "BenchmarkRef": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "EvalRun": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "split": {
+            "type": "string",
+            "enum": [
+              "train",
+              "val",
+              "calib",
+              "gold"
+            ]
+          },
+          "judgeModel": {
+            "type": "string"
+          },
+          "mean": {
+            "type": "number"
+          },
+          "low": {
+            "type": "number"
+          },
+          "high": {
+            "type": "number"
+          },
+          "cases": {
+            "type": "integer"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Metric"
+            }
+          },
+          "primaryMetric": {
+            "type": "string",
+            "nullable": true
+          },
+          "benchmark": {
+            "$ref": "#/components/schemas/BenchmarkRef"
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "model",
+          "split",
+          "judgeModel",
+          "mean",
+          "low",
+          "high",
+          "cases",
+          "metrics",
+          "primaryMetric",
+          "benchmark"
+        ]
+      },
+      "MetricComparison": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "before": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Metric"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "after": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Metric"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "difference": {
+            "type": "number",
+            "nullable": true
+          },
+          "low": {
+            "type": "number",
+            "nullable": true
+          },
+          "high": {
+            "type": "number",
+            "nullable": true
+          },
+          "paired": {
+            "type": "boolean",
+            "description": "True when both runs logged this metric per case, so the difference has a paired interval"
+          },
+          "verdict": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "better",
+              "worse",
+              "no_detectable_difference"
+            ]
+          },
+          "improved": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Cases whose value went up against the baseline; null when not paired"
+          },
+          "regressed": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Cases whose value went down against the baseline; null when not paired"
+          }
+        },
+        "required": [
+          "name",
+          "before",
+          "after",
+          "difference",
+          "low",
+          "high",
+          "paired",
+          "verdict",
+          "improved",
+          "regressed"
+        ]
+      },
+      "MetricPair": {
+        "type": "object",
+        "properties": {
+          "before": {
+            "type": "number"
+          },
+          "after": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "before",
+          "after"
+        ]
+      },
+      "PairedCase": {
+        "type": "object",
+        "properties": {
+          "inputHash": {
+            "type": "string"
+          },
+          "before": {
+            "type": "number"
+          },
+          "after": {
+            "type": "number"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetricPair"
+            },
+            "description": "Both runs' values for every paired metric"
+          }
+        },
+        "required": [
+          "inputHash",
+          "before",
+          "after",
+          "metrics"
+        ]
+      },
+      "EvalComparison": {
+        "type": "object",
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/EvalRun"
+          },
+          "after": {
+            "$ref": "#/components/schemas/EvalRun"
+          },
+          "difference": {
+            "type": "number"
+          },
+          "low": {
+            "type": "number"
+          },
+          "high": {
+            "type": "number"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "better",
+              "worse",
+              "no_detectable_difference"
+            ]
+          },
+          "fixed": {
+            "type": "integer"
+          },
+          "broken": {
+            "type": "integer"
+          },
+          "pairedCases": {
+            "type": "integer"
+          },
+          "signTest": {
+            "type": "object",
+            "properties": {
+              "pValue": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "pValue"
+            ],
+            "description": "Exact two-sided sign test of fixed against broken"
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetricComparison"
+            }
+          },
+          "cases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PairedCase"
+            }
+          }
+        },
+        "required": [
+          "before",
+          "after",
+          "difference",
+          "low",
+          "high",
+          "verdict",
+          "fixed",
+          "broken",
+          "pairedCases",
+          "signTest",
+          "metrics",
+          "cases"
+        ]
+      },
+      "CaseSide": {
+        "type": "object",
+        "properties": {
+          "score": {
+            "type": "number"
+          },
+          "output": {
+            "nullable": true
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "score",
+          "metrics"
+        ]
+      },
+      "ComparedCase": {
+        "type": "object",
+        "properties": {
+          "inputHash": {
+            "type": "string"
+          },
+          "input": {
+            "nullable": true
+          },
+          "expected": {
+            "nullable": true
+          },
+          "before": {
+            "$ref": "#/components/schemas/CaseSide"
+          },
+          "after": {
+            "$ref": "#/components/schemas/CaseSide"
+          }
+        },
+        "required": [
+          "inputHash",
+          "before",
+          "after"
+        ]
+      },
+      "HistogramBin": {
+        "type": "object",
+        "properties": {
+          "low": {
+            "type": "number"
+          },
+          "high": {
+            "type": "number"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "low",
+          "high",
+          "count"
+        ]
+      },
+      "MetricHistogram": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string"
+          },
+          "bins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistogramBin"
+            }
+          }
+        },
+        "required": [
+          "metric",
+          "bins"
+        ]
+      },
+      "CaseDetail": {
+        "type": "object",
+        "properties": {
+          "inputHash": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "input": {
+            "nullable": true
+          },
+          "output": {
+            "nullable": true
+          },
+          "expected": {
+            "nullable": true
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "inputHash",
+          "score",
+          "metrics"
+        ]
+      },
+      "ReviewItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "inputHash": {
+            "type": "string"
+          },
+          "input": {
+            "nullable": true
+          },
+          "teacherOutputs": {
+            "nullable": true
+          },
+          "agreement": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "reviewState": {
+            "type": "string",
+            "enum": [
+              "none",
+              "queued",
+              "accepted",
+              "corrected"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "inputHash",
+          "agreement",
+          "reviewState"
+        ]
+      },
+      "DatasetItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ReviewItem"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "finalOutput": {
+                "nullable": true
+              }
+            }
+          }
+        ]
+      },
+      "ReviewDecision": {
+        "type": "object",
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "accept",
+              "correct"
+            ]
+          },
+          "correctedOutput": {
+            "nullable": true
+          },
+          "reviewer": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "verdict",
+          "reviewer"
+        ]
+      },
+      "BulkReviewDecision": {
+        "type": "object",
+        "properties": {
+          "itemIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "maxItems": 500
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "accept"
+            ]
+          },
+          "reviewer": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "itemIds",
+          "verdict",
+          "reviewer"
+        ]
+      },
+      "Deployment": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "shadow",
+              "serve"
+            ]
+          },
+          "studentModel": {
+            "type": "string",
+            "nullable": true
+          },
+          "threshold": {
+            "type": "number",
+            "nullable": true
+          },
+          "targetError": {
+            "type": "number"
+          },
+          "shadowSample": {
+            "type": "number"
+          },
+          "activeFrom": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "studentModel",
+          "threshold",
+          "targetError",
+          "shadowSample",
+          "activeFrom"
+        ]
+      },
+      "TrafficBucket": {
+        "type": "object",
+        "properties": {
+          "hour": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "served_student": {
+            "type": "integer"
+          },
+          "deferred": {
+            "type": "integer"
+          },
+          "model_mismatch": {
+            "type": "integer"
+          },
+          "p95_student_ms": {
+            "type": "number",
+            "nullable": true
+          },
+          "p95_cloud_ms": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "hour",
+          "total",
+          "served_student",
+          "deferred",
+          "model_mismatch",
+          "p95_student_ms",
+          "p95_cloud_ms"
+        ]
+      },
+      "CanaryRun": {
+        "type": "object",
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "low": {
+            "type": "number"
+          },
+          "high": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "createdAt",
+          "provider",
+          "passed",
+          "total",
+          "low",
+          "high"
+        ]
+      },
+      "Alert": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "ackedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "payload": {
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "severity",
+          "createdAt",
+          "ackedAt"
+        ]
+      },
+      "TrainRun": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "taskSlug": {
+            "type": "string"
+          },
+          "base": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "succeeded",
+              "failed"
+            ]
+          },
+          "manifest": {
+            "nullable": true
+          },
+          "attestation": {
+            "nullable": true
+          },
+          "finalMetrics": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "key",
+          "taskSlug",
+          "base",
+          "method",
+          "status",
+          "finalMetrics",
+          "startedAt",
+          "finishedAt"
+        ]
+      },
+      "TrainSeriesPoint": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "integer"
+          },
+          "epoch": {
+            "type": "number",
+            "nullable": true
+          },
+          "value": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "step",
+          "epoch",
+          "value"
+        ]
+      },
+      "TaskUpsert": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "snapshotHash": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gitSha": {
+            "type": "string",
+            "minLength": 1
+          },
+          "spec": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "version",
+          "snapshotHash",
+          "gitSha",
+          "spec"
+        ]
+      },
+      "EvalRunCreate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "split": {
+            "type": "string",
+            "enum": [
+              "train",
+              "val",
+              "calib",
+              "gold"
+            ],
+            "default": "gold"
+          },
+          "judgeModel": {
+            "type": "string",
+            "nullable": true
+          },
+          "benchmark": {
+            "$ref": "#/components/schemas/BenchmarkRef"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Metric"
+            },
+            "default": {}
+          },
+          "primaryMetric": {
+            "type": "string",
+            "nullable": true
+          },
+          "cases": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "inputHash": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "score": {
+                  "type": "number"
+                },
+                "output": {
+                  "nullable": true
+                },
+                "metrics": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                },
+                "input": {
+                  "nullable": true
+                },
+                "expected": {
+                  "nullable": true
+                }
+              },
+              "required": [
+                "inputHash",
+                "score"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 100000
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "model",
+          "cases"
+        ]
+      },
+      "GateCheckInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "number"
+          },
+          "value": {
+            "type": "number"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "estimate": {
+            "type": "number",
+            "nullable": true
+          },
+          "low": {
+            "type": "number",
+            "nullable": true
+          },
+          "high": {
+            "type": "number",
+            "nullable": true
+          },
+          "measured": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name",
+          "threshold",
+          "value",
+          "passed"
+        ]
+      },
+      "GateCreate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "evalRunId": {
+            "type": "string"
+          },
+          "previousEvalRunId": {
+            "type": "string",
+            "nullable": true
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GateCheckInput"
+            }
+          },
+          "report": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          }
+        },
+        "required": [
+          "id",
+          "evalRunId",
+          "passed",
+          "checks",
+          "report"
+        ]
+      },
+      "ReviewItemsUpsert": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "inputHash": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "input": {
+                  "nullable": true
+                },
+                "teacherOutputs": {
+                  "nullable": true
+                },
+                "agreement": {
+                  "type": "boolean",
+                  "nullable": true,
+                  "default": null
+                },
+                "reviewState": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "queued",
+                    "accepted",
+                    "corrected"
+                  ],
+                  "default": "queued"
+                }
+              },
+              "required": [
+                "inputHash"
+              ]
+            },
+            "maxItems": 1000
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "DeploymentUpdate": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "shadow",
+              "serve"
+            ]
+          },
+          "studentModel": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "default": null
+          },
+          "threshold": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 1,
+            "default": null
+          },
+          "targetError": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 1,
+            "exclusiveMaximum": true
+          },
+          "shadowSample": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.1
+          },
+          "activeFrom": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "default": null
+          }
+        },
+        "required": [
+          "mode",
+          "targetError"
+        ]
+      },
+      "Recorded": {
+        "type": "object",
+        "properties": {
+          "recorded": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "recorded"
+        ]
+      },
+      "CanaryRunsCreate": {
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "provider": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "passed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "total": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "low": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "high": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "createdAt",
+                "provider",
+                "passed",
+                "total",
+                "low",
+                "high"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          }
+        },
+        "required": [
+          "runs"
+        ]
+      },
+      "AlertsCreate": {
+        "type": "object",
+        "properties": {
+          "alerts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "severity": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "payload": {
+                  "nullable": true
+                }
+              },
+              "required": [
+                "kind",
+                "severity",
+                "createdAt"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          }
+        },
+        "required": [
+          "alerts"
+        ]
+      },
+      "Conflict": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "conflict"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "TrainRunUpsert": {
+        "type": "object",
+        "properties": {
+          "base": {
+            "type": "string",
+            "minLength": 1
+          },
+          "method": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "succeeded",
+              "failed"
+            ]
+          },
+          "manifest": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "attestation": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "finalMetrics": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finishedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "base",
+          "method",
+          "status"
+        ]
+      },
+      "TrainMetricsBatch": {
+        "type": "object",
+        "properties": {
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "step": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "epoch": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "step",
+                "name",
+                "value"
+              ]
+            },
+            "maxItems": 10000
+          }
+        },
+        "required": [
+          "metrics"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/v1/tasks/{slug}/datasets": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task's case datasets with their newest version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "datasets": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DatasetSummary"
+                      }
+                    }
+                  },
+                  "required": [
+                    "datasets"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, or ids that already exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential cannot do this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such task, dataset, version or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The dataset already exists, or it moved past the base version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The dataset at version 1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dataset": {
+                      "$ref": "#/components/schemas/DatasetSnapshot"
+                    }
+                  },
+                  "required": [
+                    "dataset"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, or ids that already exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential cannot do this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such task, dataset, version or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The dataset already exists, or it moved past the base version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/datasets/{name}": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "required": true,
+            "name": "name",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "required": false,
+            "name": "version",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every row of one version, the newest when no version is given",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dataset": {
+                      "$ref": "#/components/schemas/DatasetSnapshot"
+                    }
+                  },
+                  "required": [
+                    "dataset"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, or ids that already exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential cannot do this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such task, dataset, version or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The dataset already exists, or it moved past the base version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/datasets/{name}/versions": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "required": true,
+            "name": "name",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every version, newest first; none is ever rewritten",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "versions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DatasetVersion"
+                      }
+                    }
+                  },
+                  "required": [
+                    "versions"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, or ids that already exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential cannot do this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such task, dataset, version or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The dataset already exists, or it moved past the base version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/datasets/{name}/export": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "required": true,
+            "name": "name",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "required": false,
+            "name": "version",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One case per line, in the benchmark file format",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, or ids that already exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential cannot do this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such task, dataset, version or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The dataset already exists, or it moved past the base version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/datasets/{name}/rows": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "required": true,
+            "name": "name",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RowsAppend"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new version and the rows it added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetWrite"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, or ids that already exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential cannot do this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such task, dataset, version or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The dataset already exists, or it moved past the base version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/datasets/{name}/rows/{rowId}": {
+      "patch": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "required": true,
+            "name": "name",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "rowId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RowPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The new version and the row as it now reads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetWrite"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, or ids that already exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential cannot do this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such task, dataset, version or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The dataset already exists, or it moved past the base version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "required": true,
+            "name": "name",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "rowId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "required": true,
+            "name": "baseVersion",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The new version without the row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetWrite"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, or ids that already exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential cannot do this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such task, dataset, version or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The dataset already exists, or it moved past the base version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/datasets/{name}/rows/{rowId}/history": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "required": true,
+            "name": "name",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "rowId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every revision of the row, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revisions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RowRevision"
+                      }
+                    }
+                  },
+                  "required": [
+                    "revisions"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, or ids that already exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential cannot do this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such task, dataset, version or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The dataset already exists, or it moved past the base version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/requests": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": false,
+            "name": "task",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "deferred",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": false,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": false,
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gateway requests, newest first, one page at a time",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requests": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ServedRequest"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "requestBodyStored": {
+                      "type": "boolean",
+                      "description": "False while the gateway logs only a hash of each request"
+                    }
+                  },
+                  "required": [
+                    "requests",
+                    "nextCursor",
+                    "requestBodyStored"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filter or cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/api-keys": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "description": "Create an API key for the signed-in dashboard user. Only a session can do this; the key is returned once.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new key, shown only in this response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedApiKey"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/onboarding": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "description": "Mark the signed-in dashboard user as onboarded. Repeating it keeps the first time.",
+        "responses": {
+          "200": {
+            "description": "When the user finished onboarding",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "onboardedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "onboardedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tasks": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TaskSummary"
+                      }
+                    }
+                  },
+                  "required": [
+                    "tasks"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "task": {
+                      "$ref": "#/components/schemas/TaskSummary"
+                    }
+                  },
+                  "required": [
+                    "task"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpsert"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task and the registered version, which becomes current",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "task": {
+                      "$ref": "#/components/schemas/TaskSummary"
+                    },
+                    "version": {
+                      "$ref": "#/components/schemas/TaskVersion"
+                    }
+                  },
+                  "required": [
+                    "task",
+                    "version"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/versions": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Versions of a task, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "versions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TaskVersion"
+                      }
+                    }
+                  },
+                  "required": [
+                    "versions"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/gates": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gate decisions for a task, newest first, with every check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "gates": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/GateRecord"
+                      }
+                    }
+                  },
+                  "required": [
+                    "gates"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GateCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The gate already existed; it is returned unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "gate": {
+                      "$ref": "#/components/schemas/GateRecord"
+                    }
+                  },
+                  "required": [
+                    "gate"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The gate was recorded with every check and the full report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "gate": {
+                      "$ref": "#/components/schemas/GateRecord"
+                    }
+                  },
+                  "required": [
+                    "gate"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/eval-runs": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Eval runs for a task, newest first, each with a mean and a 95% interval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/EvalRun"
+                      }
+                    }
+                  },
+                  "required": [
+                    "runs"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvalRunCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The run already existed; it is returned unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": {
+                      "$ref": "#/components/schemas/EvalRun"
+                    }
+                  },
+                  "required": [
+                    "run"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The run was created against the task's current version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": {
+                      "$ref": "#/components/schemas/EvalRun"
+                    }
+                  },
+                  "required": [
+                    "run"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/eval-runs/compare": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "before",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "after",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paired comparison with a seeded 95% percentile bootstrap interval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvalComparison"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/eval-runs/compare/case": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "before",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "after",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "inputHash",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One case from both runs: input, expected answer, both outputs and their per-case scores",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "case": {
+                      "$ref": "#/components/schemas/ComparedCase"
+                    }
+                  },
+                  "required": [
+                    "case"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/eval-runs/{id}": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One eval run with a histogram of the case score and of every metric each case logged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": {
+                      "$ref": "#/components/schemas/EvalRun"
+                    },
+                    "histograms": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MetricHistogram"
+                      }
+                    }
+                  },
+                  "required": [
+                    "run",
+                    "histograms"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/eval-runs/{id}/cases": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0,
+              "default": 0
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 200
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of the run's cases, lowest score first, each with input, output, expected answer and per-metric scores",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "cases": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CaseDetail"
+                      }
+                    }
+                  },
+                  "required": [
+                    "total",
+                    "offset",
+                    "cases"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/dataset-items": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "none",
+                "queued",
+                "accepted",
+                "corrected"
+              ]
+            },
+            "required": false,
+            "name": "state",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 200
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every dataset item of the task with its review state and the output a reviewer settled on",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DatasetItem"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/review-queue": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dataset items queued for human review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ReviewItem"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/review-queue/{itemId}/decision": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The reviewed item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/ReviewItem"
+                    }
+                  },
+                  "required": [
+                    "item"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/review-queue/decisions": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "description": "Accept many review items at once. A correction needs its own output, so it stays a single-item decision.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkReviewDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The decided items, and the ids that matched no item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ReviewItem"
+                      }
+                    },
+                    "missing": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "missing"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/deployment": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task's current deployment, or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deployment": {
+                      "$ref": "#/components/schemas/Deployment"
+                    }
+                  },
+                  "required": [
+                    "deployment"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The deployment now in effect",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deployment": {
+                      "$ref": "#/components/schemas/Deployment"
+                    }
+                  },
+                  "required": [
+                    "deployment"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/traffic": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 720,
+              "default": 24
+            },
+            "required": false,
+            "name": "hours",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hourly serving traffic and the share of calls deferred to the cloud model",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "buckets": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TrafficBucket"
+                      }
+                    },
+                    "deferralShare": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "buckets",
+                    "deferralShare"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/canaries": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canary runs, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CanaryRun"
+                      }
+                    }
+                  },
+                  "required": [
+                    "runs"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanaryRunsCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Runs recorded; a run sent again with the same id is skipped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recorded"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/alerts": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Alerts, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "alerts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Alert"
+                      }
+                    }
+                  },
+                  "required": [
+                    "alerts"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertsCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Alerts recorded unacknowledged; an alert sent again with the same id is skipped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recorded"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/train-runs": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Training runs for a task, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TrainRun"
+                      }
+                    }
+                  },
+                  "required": [
+                    "runs"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/train-runs/{key}": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._-]{1,200}$"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One training run with every logged metric as a series ordered by step",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": {
+                      "$ref": "#/components/schemas/TrainRun"
+                    },
+                    "series": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/TrainSeriesPoint"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "run",
+                    "series"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/review-items": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewItemsUpsert"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Items upserted by input hash; a human decision is never overwritten",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "upserted": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "upserted"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{slug}/train-runs/{key}": {
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._-]{1,200}$"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainRunUpsert"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The run as stored; fields left out keep their stored value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": {
+                      "$ref": "#/components/schemas/TrainRun"
+                    }
+                  },
+                  "required": [
+                    "run"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The key belongs to a run of another task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/train-runs/{key}/metrics": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._-]{1,200}$"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainMetricsBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Points stored by run, step and name; sending a point again replaces it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accepted": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "accepted"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, API key, OAuth token or admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The credential lacks the permission or scope this needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8787",
+      "description": "Self-hosted API on your machine"
+    }
+  ]
+}

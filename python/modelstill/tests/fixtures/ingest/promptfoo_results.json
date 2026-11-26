@@ -1,0 +1,143 @@
+{
+  "evalId": "eval-7Xq-2026-11-20T09:30:00",
+  "results": {
+    "version": 3,
+    "timestamp": "2026-11-20T09:30:00.000Z",
+    "prompts": [
+      {
+        "raw": "Extract the tools from: {{text}}",
+        "label": "extract-v3",
+        "provider": "openai:gpt-5-mini",
+        "metrics": {"score": 2, "testPassCount": 2, "testFailCount": 1}
+      },
+      {
+        "raw": "Extract the tools from: {{text}}",
+        "label": "extract-v3",
+        "provider": "Qwen student",
+        "metrics": {"score": 1, "testPassCount": 1, "testFailCount": 2}
+      }
+    ],
+    "results": [
+      {
+        "id": "r1",
+        "promptIdx": 0,
+        "testIdx": 0,
+        "promptId": "p1",
+        "testCase": {"description": "python and dbt", "vars": {"text": "We use Python and dbt."}, "assert": [{"type": "icontains-all", "value": ["python", "dbt"]}]},
+        "prompt": {"raw": "Extract the tools from: We use Python and dbt.", "label": "extract-v3"},
+        "provider": {"id": "openai:gpt-5-mini", "label": ""},
+        "vars": {"text": "We use Python and dbt."},
+        "response": {"output": "python, dbt", "tokenUsage": {"total": 30}},
+        "failureReason": 0,
+        "success": true,
+        "score": 1,
+        "latencyMs": 820,
+        "namedScores": {"tools": 1},
+        "gradingResult": {"pass": true, "score": 1, "reason": "All assertions passed"},
+        "cost": 0.00002
+      },
+      {
+        "id": "r2",
+        "promptIdx": 0,
+        "testIdx": 1,
+        "promptId": "p1",
+        "testCase": {"description": "excel homograph", "vars": {"text": "Excel at sales."}, "assert": [{"type": "equals", "value": "none"}]},
+        "prompt": {"raw": "Extract the tools from: Excel at sales.", "label": "extract-v3"},
+        "provider": {"id": "openai:gpt-5-mini", "label": ""},
+        "vars": {"text": "Excel at sales."},
+        "response": {"output": "excel"},
+        "failureReason": 1,
+        "success": false,
+        "score": 0,
+        "latencyMs": 640,
+        "namedScores": {"tools": 0},
+        "repeatIndex": 0
+      },
+      {
+        "id": "r3",
+        "promptIdx": 0,
+        "testIdx": 1,
+        "promptId": "p1",
+        "testCase": {"description": "excel homograph", "vars": {"text": "Excel at sales."}, "assert": [{"type": "equals", "value": "none"}]},
+        "prompt": {"raw": "Extract the tools from: Excel at sales.", "label": "extract-v3"},
+        "provider": {"id": "openai:gpt-5-mini", "label": ""},
+        "vars": {"text": "Excel at sales."},
+        "response": {"output": "none"},
+        "failureReason": 0,
+        "success": true,
+        "score": 1,
+        "latencyMs": 660,
+        "namedScores": {"tools": 1},
+        "repeatIndex": 1
+      },
+      {
+        "id": "r4",
+        "promptIdx": 0,
+        "testIdx": 2,
+        "promptId": "p1",
+        "testCase": {"description": "kubernetes", "vars": {"text": "Kubernetes on AWS."}},
+        "prompt": {"raw": "Extract the tools from: Kubernetes on AWS.", "label": "extract-v3"},
+        "provider": {"id": "openai:gpt-5-mini", "label": ""},
+        "vars": {"text": "Kubernetes on AWS."},
+        "response": {"output": "kubernetes, aws"},
+        "failureReason": 0,
+        "success": true,
+        "score": 0.75,
+        "latencyMs": 700,
+        "namedScores": {}
+      },
+      {
+        "id": "r5",
+        "promptIdx": 1,
+        "testIdx": 0,
+        "promptId": "p1",
+        "testCase": {"description": "python and dbt", "vars": {"text": "We use Python and dbt."}, "assert": [{"type": "icontains-all", "value": ["python", "dbt"]}]},
+        "prompt": {"raw": "Extract the tools from: We use Python and dbt.", "label": "extract-v3"},
+        "provider": {"id": "openai:chat:qwen3-4b", "label": "Qwen student"},
+        "vars": {"text": "We use Python and dbt."},
+        "response": {"output": "python"},
+        "failureReason": 1,
+        "success": false,
+        "score": 0.5,
+        "latencyMs": 90,
+        "namedScores": {"tools": 0.5}
+      },
+      {
+        "id": "r6",
+        "promptIdx": 1,
+        "testIdx": 1,
+        "promptId": "p1",
+        "testCase": {"description": "excel homograph", "vars": {"text": "Excel at sales."}, "assert": [{"type": "equals", "value": "none"}]},
+        "prompt": {"raw": "Extract the tools from: Excel at sales.", "label": "extract-v3"},
+        "provider": {"id": "openai:chat:qwen3-4b", "label": "Qwen student"},
+        "vars": {"text": "Excel at sales."},
+        "response": {"output": "none"},
+        "failureReason": 0,
+        "success": true,
+        "score": 1,
+        "latencyMs": 85,
+        "namedScores": {"tools": 1}
+      },
+      {
+        "id": "r7",
+        "promptIdx": 1,
+        "testIdx": 2,
+        "promptId": "p1",
+        "testCase": {"description": "kubernetes", "vars": {"text": "Kubernetes on AWS."}},
+        "prompt": {"raw": "Extract the tools from: Kubernetes on AWS.", "label": "extract-v3"},
+        "provider": {"id": "openai:chat:qwen3-4b", "label": "Qwen student"},
+        "vars": {"text": "Kubernetes on AWS."},
+        "error": "API error: 503 Service Unavailable",
+        "failureReason": 2,
+        "success": false,
+        "score": 0,
+        "latencyMs": 30010,
+        "namedScores": {}
+      }
+    ],
+    "stats": {"successes": 4, "failures": 2, "errors": 1, "tokenUsage": {"total": 30}}
+  },
+  "config": {"description": "technographics extraction"},
+  "shareableUrl": null,
+  "metadata": {"promptfooVersion": "0.120.4", "nodeVersion": "v22.11.0", "platform": "darwin", "arch": "arm64", "exportedAt": "2026-11-20T09:31:00.000Z", "evaluationCreatedAt": "2026-11-20T09:30:00.000Z", "author": null}
+}

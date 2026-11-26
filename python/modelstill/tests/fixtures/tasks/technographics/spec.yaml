@@ -1,0 +1,39 @@
+task: technographics
+version: 1
+instruction: prompts/system.md
+output_schema: schemas/out.json
+requirements:
+  - id: correct_technologies
+    priority: p0
+    type: set_f1
+    instruction: Every technology named in the text, and nothing else.
+  - id: correct_strength
+    priority: p1
+    type: label
+    instruction: Strength is required, preferred or mentioned, as the text states it.
+labelling:
+  teachers:
+    - {model: deepseek/deepseek-v4-flash, family: deepseek}
+    - {model: qwen/qwen3.7-flash, family: qwen}
+  disagreement: human_queue
+eval:
+  judge: {model: google/gemma-4-27b-it, family: gemma}
+  golden_set: data/golden.jsonl
+  gate:
+    metric: correct_technologies
+    max_regression: 0.02
+    max_flip_rate: 0.01
+    max_cost_ratio: 0.60
+    max_p95_latency_ms: 4000
+train:
+  base: Qwen/Qwen3-1.7B
+  method: lora
+  lora_r: 16
+  seeds: [1, 2, 3]
+serve:
+  litellm_alias: technographics
+  fallback: technographics-cloud
+  target_error: 0.05
+monitor:
+  canary: data/canary.jsonl
+  replay_frac: 0.3

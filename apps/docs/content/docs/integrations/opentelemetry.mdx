@@ -1,0 +1,25 @@
+---
+title: OpenTelemetry
+description: Read GenAI spans from an OTLP JSON export into a ModelStill dataset.
+icon: TreeStructure
+---
+
+```bash title="Terminal"
+modelstill ingest otel traces.json --out data/otel.jsonl
+```
+
+The file is either one `ExportTraceServiceRequest` object or the collector file exporter's JSON lines, one object per line.
+
+## Which spans count
+
+A span counts when it has any `gen_ai.*` attribute. The input is read from the first of these that is present:
+
+1. `gen_ai.input.messages`, with `gen_ai.system_instructions` prepended as a system message (the current convention);
+2. the indexed `gen_ai.prompt.<n>.role` and `.content` attributes, as older instrumentations write them;
+3. the `gen_ai.content.prompt` span event's `gen_ai.prompt` attribute.
+
+The answer comes from `gen_ai.output.messages` (the first choice), `gen_ai.completion.0.content`, or the `gen_ai.content.completion` event.
+
+- Message parts that are all text are flattened to `{"role", "content"}`. Tool calls and other parts are kept as they are.
+- The output key is `gen_ai.response.model`, the model that actually answered, falling back to `gen_ai.request.model`.
+- A span with status `ERROR` becomes an error output.

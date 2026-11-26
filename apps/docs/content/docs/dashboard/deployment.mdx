@@ -1,0 +1,40 @@
+---
+title: Deployment
+description: See and change the task's gateway routing - mode, student model, threshold, target error and shadow sample - and the gate behind it.
+icon: CloudArrowUp
+---
+
+**Deployment** shows how the gateway routes the task: the mode (`off`, `shadow`, `serve`), the student model, the confidence threshold, the target error, the shadow sample and since when it is active. Below it is the latest gate, because a student is served only after its gate passes.
+
+## Change the serving mode
+
+The **Serving mode** card switches the task between `off`, `shadow` and `serve`. It shows the student model, the confidence threshold and the shadow sample the mode runs with.
+
+- **off** and **shadow** are saved as soon as you pick them.
+- **serve** asks you to confirm first, because callers then get the student's answers. It is disabled until the deployment names a student model and has a calibrated threshold.
+
+The dashboard writes the change with `PUT /v1/tasks/{slug}/deployment`, keeping the student model, threshold, target error and shadow sample, and stamps the new mode as active from now. If the API refuses the change, the mode stays as it was and the error is shown.
+
+When the LiteLLM plugin is configured with the API (an `api` block in its config), that record is what the running proxy serves, so the change reaches it within its reload interval with no file edit. Without the `api` block the plugin serves its deployment file and the record here only documents it. See [Serving modes](/concepts/serving-modes) for the precedence rule.
+
+The threshold and shadow sample are not edited here. Change them with the calibration command below and push the deployment again.
+
+## Calibrate the threshold
+
+The threshold comes from a calibration split, never from the gold set:
+
+```bash title="Terminal"
+modelstill serve calibrate calib.jsonl --target-error 0.05 --deployment <task>.deployment.yaml
+```
+
+`calib.jsonl` holds one `{"confidence": 0.97, "correct": true}` per item. The command prints the threshold, the share of requests the student will answer and the upper bound of the error on accepted answers, and writes the threshold into the deployment file. If no cut-off keeps the error under target, it clears the threshold and `serve` mode defers everything. When the plugin follows the API, put the same threshold in the API record (below), because the record wins over the file.
+
+## Set the deployment from the API
+
+```bash title="Terminal"
+curl -X PUT http://localhost:8787/v1/tasks/<task>/deployment \
+  -H "Authorization: Bearer $MODELSTILL_API_KEY" -H "Content-Type: application/json" \
+  -d '{"mode": "shadow", "studentModel": "<served-name>", "threshold": 0.93, "targetError": 0.05, "shadowSample": 0.1}'
+```
+
+The `PUT` replaces the whole record. The MCP tool `set_deployment_mode` reads the current record first and changes only what you name, so it does not reset the student model or threshold.

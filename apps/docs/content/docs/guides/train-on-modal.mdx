@@ -1,0 +1,98 @@
+---
+title: Train on Modal
+description: Train LoRA adapters on a Modal GPU with a hard cost cap, serve them with vLLM on Modal, and stop everything afterwards.
+icon: Cpu
+---
+
+The `modal` backend trains on a Modal GPU and the repository's Modal app serves the adapters with vLLM. Nothing trains or loads a model on your machine.
+
+<Steps>
+
+<Step>
+
+### Set a spend limit and install
+
+Set a workspace spend limit in the Modal dashboard under **Settings > Usage & Billing** first. Then install the extra and check which workspace will be billed:
+
+```bash title="Terminal"
+cd python/modelstill
+uv sync --extra dev --extra modal
+uv run modal profile current
+```
+
+</Step>
+
+<Step>
+
+### Dry run
+
+```bash title="Terminal"
+uv run modelstill train run tasks/<task>/spec.yaml --train train.jsonl --val val.jsonl \
+  --max-seq-length 4096 --eval-steps 200 --seed 1 --backend modal --dry-run
+```
+
+It prints, per seed, the exact plan, the files it would upload, the image pins, the GPU, the timeout, `estimated_cost_usd` and `max_cost_usd`, and contacts nothing. `max_cost_usd` is the most one run can cost, because Modal stops the function at the timeout. Add `--gpu H100` to compare GPUs. `--eval-steps 200` keeps validation cheap.
+
+</Step>
+
+<Step>
+
+### Train with a cap
+
+```bash title="Terminal"
+uv run modelstill train run tasks/<task>/spec.yaml --train train.jsonl --val val.jsonl \
+  --max-seq-length 4096 --eval-steps 200 --seed 1 \
+  --backend modal --gpu L40S --timeout-minutes 185
+```
+
+The run is an ephemeral Modal app that stops when your terminal disconnects, so keep the machine awake. The first run builds the image and downloads the base model into the `modelstill-hf-cache` volume. It prints one JSON line with the artifact `path`, the `served_name` and the metrics. An existing path is never overwritten: the run fails with "already exists" instead.
+
+```bash title="Terminal"
+uv run modal volume ls modelstill-artifacts adapters/<task>
+uv run modal volume get modelstill-artifacts adapters/<task>/<version> ./artifacts/<task>/
+```
+
+</Step>
+
+<Step>
+
+### Serve
+
+Create the auth secret once, then deploy the adapters you want to serve:
+
+```bash title="Terminal"
+umask 077; openssl rand -hex 32 > ~/.config/modelstill/student.key
+uv run modal secret create modelstill-student-auth VLLM_API_KEY="$(cat ~/.config/modelstill/student.key)"
+MODELSTILL_ADAPTERS=<task>/<version> uv run modal deploy ../../deploy/modal/modelstill_student.py
+```
+
+Deploying costs nothing until a request arrives. The first request starts a container in a few minutes; it stops after 5 idle minutes. `MODELSTILL_SERVE_GPU=L4` deploys on a cheaper, slower GPU. Check it:
+
+```bash title="Terminal"
+export STUDENT_URL=https://<workspace>--modelstill-student-serve.modal.run
+curl -s $STUDENT_URL/v1/models -H "Authorization: Bearer $(cat ~/.config/modelstill/student.key)"
+```
+
+Each adapter is listed under its served name. That name is the `student_model` in the deployment file, and `$STUDENT_URL` is the plugin's student `base_url`.
+
+</Step>
+
+<Step>
+
+### Stop everything
+
+```bash title="Terminal"
+uv run modal app list
+uv run modal app stop modelstill-student
+uv run modal app stop modelstill-train
+```
+
+A stopped serving app costs nothing. Keep the `modelstill-artifacts` volume: artifact paths are meant to be permanent.
+
+</Step>
+
+</Steps>
+
+<Callout type="warn">
+The Modal backend trains `lora` and `full` plans. Use the GPU host backend for `distill` and `grpo`.
+</Callout>

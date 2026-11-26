@@ -1,0 +1,47 @@
+---
+title: Set up with your agent
+description: modelstill setup hands your coding agent a short fixed prompt that finds your LLM calls and adds a first task spec, recording and a CI gate.
+icon: Terminal
+---
+
+Run it at the root of your application's repository, with `modelstill` installed:
+
+<Tabs items={["Print", "Claude Code", "Codex"]}>
+
+```bash tab="Print"
+modelstill setup
+```
+
+```bash tab="Claude Code"
+modelstill setup --agent claude
+```
+
+```bash tab="Codex"
+modelstill setup --agent codex
+```
+
+</Tabs>
+
+- `print`, the default, prints the prompt for you to paste into any agent.
+- `claude` runs `claude -p --permission-mode acceptEdits "<prompt>"`.
+- `codex` runs `codex exec --sandbox workspace-write "<prompt>"`.
+
+The agent is launched only when its binary is on the PATH; otherwise the command says so and prints the prompt. `setup` itself writes no file, asks for no key and contacts nothing.
+
+## What the prompt asks for
+
+1. Read the bundled [skill](/ai-agents/skill); the prompt carries its installed path.
+2. Find the application's LLM calls: file, model, prompt and answer shape.
+3. Add `tasks/<task>/spec.yaml` for the narrowest, busiest call and run `modelstill spec validate` until it passes.
+4. Wire recording: the ModelStill LiteLLM plugin in mode `off` if the app goes through LiteLLM, otherwise run history files.
+5. Add the pull-request gate workflow (see [Regression-test prompt and model changes in CI](/guides/ci-gate)).
+6. Stop and list what it changed and what you still decide: teachers, judge and thresholds. No commit, no push.
+
+It must not run the application, read secret files or write a secret into the repository.
+
+## Why these flags
+
+- `claude -p` runs once and exits. `acceptEdits` lets it edit files but still asks before shell commands, so it cannot start your application unattended. In headless mode that also denies `modelstill spec validate`: run it yourself afterwards.
+- `codex exec --sandbox workspace-write` can write only inside the repository and has no network by default.
+
+Review the diff before committing. The spec's teachers, judge and gate thresholds are placeholders until you pick them.

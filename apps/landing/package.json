@@ -1,0 +1,32 @@
+{
+  "name": "@modelstill/landing",
+  "license": "Apache-2.0",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 4325",
+    "build": "next build",
+    "deploy": "bun run build && cf deploy out",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "bun test",
+    "cleanup": "rimraf node_modules .next out .turbo"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.1",
+    "@types/bun": "1.2.8",
+    "@types/node": "22.15.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "cf": "1.0.0-rc.5",
+    "rimraf": "6.0.1",
+    "tailwindcss": "4.3.1",
+    "typescript": "5.8.2"
+  }
+}

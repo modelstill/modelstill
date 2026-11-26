@@ -1,0 +1,123 @@
+name: ModelStill gate
+description: Decide the ModelStill release gate for a recorded run and post it as one sticky pull-request comment.
+
+inputs:
+  spec:
+    description: Task spec, for example tasks/<task>/spec.yaml
+    required: true
+  history:
+    description: Run history JSONL file
+    required: true
+  run:
+    description: Candidate run id or unique prefix
+    required: true
+  baseline:
+    description: Accepted baseline run id; required when the gate sets max_regression
+    required: false
+    default: ""
+  flip-rate:
+    description: Measured bf16/fp16 flip rate; pass 1 when not measured
+    required: true
+  cost-ratio:
+    description: Measured cost ratio against the cloud model
+    required: true
+  p95-latency-ms:
+    description: Measured p95 latency in milliseconds
+    required: true
+  primary-metric:
+    description: Named metric in the run to gate on instead of the per-case mean
+    required: false
+    default: ""
+  python-version:
+    description: Python used to install modelstill
+    required: false
+    default: "3.12"
+  package:
+    description: Exact modelstill requirement to install
+    required: false
+    default: modelstill==0.1.0
+  working-directory:
+    description: Directory the paths are relative to
+    required: false
+    default: "."
+  github-token:
+    description: Token used to post the comment
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  passed:
+    description: true when every gate check passed
+    value: ${{ steps.report.outputs.passed }}
+  report:
+    description: Path to the Markdown report
+    value: ${{ steps.report.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+      with:
+        version: "0.13.7"
+        python-version: ${{ inputs.python-version }}
+        enable-cache: false
+
+    - name: Install modelstill
+      shell: bash
+      env:
+        PACKAGE: ${{ inputs.package }}
+        PYTHON_VERSION: ${{ inputs.python-version }}
+      run: |
+        uv venv "$RUNNER_TEMP/modelstill" --python "$PYTHON_VERSION"
+        uv pip install --python "$RUNNER_TEMP/modelstill/bin/python" "$PACKAGE"
+
+    - name: Decide the gate
+      id: report
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SPEC: ${{ inputs.spec }}
+        HISTORY: ${{ inputs.history }}
+        RUN_ID: ${{ inputs.run }}
+        BASELINE: ${{ inputs.baseline }}
+        FLIP_RATE: ${{ inputs.flip-rate }}
+        COST_RATIO: ${{ inputs.cost-ratio }}
+        P95_LATENCY_MS: ${{ inputs.p95-latency-ms }}
+        PRIMARY_METRIC: ${{ inputs.primary-metric }}
+      run: |
+        args=(report gate "$HISTORY" "$RUN_ID" --spec "$SPEC" --flip-rate "$FLIP_RATE" --cost-ratio "$COST_RATIO" --p95-latency-ms "$P95_LATENCY_MS" --format markdown)
+        if [ -n "$BASELINE" ]; then args+=(--previous "$BASELINE"); fi
+        if [ -n "$PRIMARY_METRIC" ]; then args+=(--primary-metric "$PRIMARY_METRIC"); fi
+        report="$RUNNER_TEMP/modelstill-gate.md"
+        set +e
+        "$RUNNER_TEMP/modelstill/bin/modelstill" "${args[@]}" > "$report"
+        status=$?
+        set -e
+        if [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then exit "$status"; fi
+        echo "report=$report" >> "$GITHUB_OUTPUT"
+        if [ "$status" -eq 0 ]; then echo "passed=true" >> "$GITHUB_OUTPUT"; else echo "passed=false" >> "$GITHUB_OUTPUT"; fi
+        cat "$report" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Post or update the pull-request comment
+      if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        REPORT: ${{ steps.report.outputs.report }}
+      run: |
+        marker='<!-- modelstill-gate -->'
+        existing=$(gh api --paginate "repos/$REPO/issues/$PR/comments" --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n 1)
+        if [ -n "$existing" ]; then
+          gh api --method PATCH "repos/$REPO/issues/comments/$existing" -F "body=@$REPORT" > /dev/null
+        else
+          gh api --method POST "repos/$REPO/issues/$PR/comments" -F "body=@$REPORT" > /dev/null
+        fi
+
+    - name: Fail when the gate fails
+      if: steps.report.outputs.passed != 'true'
+      shell: bash
+      run: |
+        echo "::error::ModelStill gate failed; see the pull-request comment or the job summary"
+        exit 1

@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: modelstill
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/modelstill/modelstill
+    targetRevision: main
+    path: deploy/k8s/modelstill
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: modelstill
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - CreateNamespace=false

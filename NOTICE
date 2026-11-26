@@ -1,0 +1,29 @@
+ModelStill
+Copyright 2026 the ModelStill authors
+
+This product includes software adapted from Helicone (https://github.com/Helicone/helicone),
+Copyright 2023 Helicone Inc, licensed under the Apache License, Version 2.0. The licence text is in
+packages/ui/src/vendor/helicone/LICENSE.
+
+Files adapted from Helicone, each modified as described in its header (re-styled with ModelStill's
+design tokens, Helicone dependencies, data hooks and branding removed):
+
+  packages/ui/src/vendor/helicone/status-badge.tsx
+    from web/components/templates/requests/statusBadge.tsx
+  packages/ui/src/vendor/helicone/model-pill.tsx
+    from web/components/templates/requests/modelPill.tsx
+  packages/ui/src/vendor/helicone/json-renderer.tsx
+    from web/components/templates/requests/components/chatComponent/single/JsonRenderer.tsx
+  packages/ui/src/vendor/helicone/quantiles-chart.tsx
+    from web/components/templates/dashboard/quantilesGraph.tsx
+
+The landing page (apps/landing/public/logos) shows the logos of tools ModelStill works with. Each
+logo is a trademark of its owner, is used only to name that tool, and is not covered by this
+repository's licence. Sources:
+
+  langfuse.svg        langfuse/langfuse-docs, public/brand-assets/icon/color/langfuse-icon.svg
+  braintrust.png      braintrust.dev site icon
+  opentelemetry.svg   cncf/artwork, projects/opentelemetry/icon/color/opentelemetry-icon-color.svg
+  litellm.png         BerriAI/litellm, litellm/proxy/logo_monogram.png
+  pytest.svg          pytest-dev/pytest, doc/en/img/pytest_logo_curves.svg, cropped to the mark
+  github-actions.png  github/explore, topics/actions/actions.png

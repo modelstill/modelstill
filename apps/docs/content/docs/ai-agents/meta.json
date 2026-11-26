@@ -1,0 +1,10 @@
+{
+  "title": "MCP & AI Agents",
+  "icon": "Robot",
+  "root": true,
+  "pages": [
+    "mcp",
+    "skill",
+    "setup"
+  ]
+}

@@ -1,0 +1,29 @@
+---
+title: Traffic and requests
+description: Hourly serving traffic, the share deferred to the cloud model, model mismatches, latency, and the list of individual requests.
+icon: ChartLineUp
+---
+
+**Traffic** reads the serving events the LiteLLM plugin writes to ClickHouse (`modelstill.serving_events`). Pick a window of 24 hours, 3 days or 7 days.
+
+## The numbers
+
+- **Deferral share:** the share of calls the cloud model answered.
+- **Requests**, **Served by student** and **Model mismatches**: totals for the window.
+- Charts: requests per hour, served by the student against deferred, model mismatches, and p95 latency for each side.
+
+A model mismatch is a call where the student server reported another model than the deployed one. The plugin defers those to the cloud.
+
+## Requests
+
+The request list pages through individual calls, newest first, 50 at a time. Filter by task, by who answered (all, deferred, student) and by a time range (the last 7 days by default). Each request shows the time, who answered, latency, cost and where it was served from.
+
+Open a request to see its mode, latency and cost split between student and cloud, the confidence, the model check, both answers and the deferral reason.
+
+<Callout type="warn">
+The request body is not stored, only its hash. **Add to review** queues the request hash with both answers. **Add to dataset** writes a case whose input is `{"requestHash": ...}` for you to fill in on the Datasets page.
+</Callout>
+
+## Needs
+
+The API reads ClickHouse with `CLICKHOUSE_URL`, `CLICKHOUSE_USER` and `CLICKHOUSE_PASSWORD` (`CLICKHOUSE_DATABASE` defaults to `modelstill`). Without them the page shows no traffic. Apply the schema with `clickhouse-client --multiquery < deploy/clickhouse/schema.sql`.

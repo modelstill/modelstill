@@ -1,0 +1,65 @@
+---
+title: "ModelStill: open-source LLM eval framework and release gate"
+description: ModelStill is a release gate for AI features, built on LLM evals. It checks every model and prompt change against an accepted baseline, case by case, and tells you whether it is safe to ship.
+icon: House
+---
+
+import { Rocket, Key, Terminal, FileArrowDown, ListChecks, ArrowsLeftRight, GraduationCap, CloudArrowUp, Pulse, Robot, Code } from "@phosphor-icons/react/ssr";
+
+ModelStill is a library and a self-hosted dashboard for one job: deciding, with numbers you can trust, whether a cheaper or self-trained model can take over a call your application sends to a cloud LLM today.
+
+It is a library first. You can use it only to write evals and gates, or go all the way to training a small student model and serving it.
+
+## Start here
+
+- [Regression-test prompt and model changes in CI](/guides/ci-gate): run the gate on every pull request with GitHub Actions.
+- [Build a golden dataset from production traces](/guides/golden-dataset): turn real calls into reviewed, versioned cases.
+- [Use an LLM as a judge, checked against people](/guides/llm-as-a-judge): score open-ended answers and measure how far to trust the judge.
+
+## What it does
+
+- **Record.** Read the calls you already log (Langfuse, Braintrust, OpenTelemetry GenAI spans, LiteLLM spend logs, any JSONL) into a dataset.
+- **Build eval sets.** Turn records into benchmark cases, version them in the dashboard, and send disagreements to a human review queue.
+- **Score with intervals.** Every score carries a 95% interval: exact Clopper-Pearson for pass/fail scores, a seeded bootstrap otherwise. A single number is never the result.
+- **Gate changes.** Compare a candidate with the accepted baseline case by case. The gate checks the lower bound of the paired difference, flip rate, cost ratio and p95 latency, and stores every threshold and measured value.
+- **Distil.** Train a LoRA or full-weight student on recorded answers, on your own GPU host or on Modal.
+- **Serve.** Put the student behind the task's existing LiteLLM name with the ModelStill plugin. Roll out `off`, then `shadow`, then `serve`. Roll back with `mode: off`.
+- **Watch.** Known-answer canaries, temperature-0 drift hashes and a log-prob watchdog catch a model that changes behind an unchanged name.
+
+## How a task moves through it
+
+1. **Spec.** One YAML file per task: instruction, output schema, requirements, teachers, judge, gate thresholds, training, serving and monitoring settings.
+2. **Label.** Calls are answered by two teacher models; disagreements go to a person.
+3. **Train.** A small model is trained with several seeds.
+4. **Score.** A judge from a different model family scores it, and scores are reported with exact intervals.
+5. **Gate.** Quality lower bound, cost, latency and flip rate decide whether it ships.
+6. **Serve.** The student answers when it is confident; otherwise the cloud model answers. Both answers are logged.
+7. **Watch.** Canaries and drift checks, with a fallback to the cloud model when something breaks.
+
+<Callout type="warn">
+ModelStill is self-hosted today. There is no hosted service and no public URL. The examples use the local defaults: the API on `http://localhost:8787`, the dashboard on `http://localhost:4323` and the MCP server on `http://localhost:3104/mcp`. The Python package is not on PyPI yet; install it from the repository.
+</Callout>
+
+## A first look
+
+```bash title="Terminal"
+modelstill spec validate tasks/<task>/spec.yaml
+modelstill eval runs history.jsonl
+modelstill eval compare history.jsonl <before> <after>
+```
+
+## Explore the docs
+
+<Cards>
+  <Card icon={<Rocket />} title="Quickstart" href="/quickstart" description="Install, define a task, record a first eval and push it to the dashboard." />
+  <Card icon={<Key />} title="Authentication" href="/authentication" description="ms_live_ API keys, the admin token and MCP OAuth." />
+  <Card icon={<ListChecks />} title="Regression-test changes in CI" href="/guides/ci-gate" description="Post the gate as a pull-request comment and fail the job when it fails." />
+  <Card icon={<ArrowsLeftRight />} title="Check a model swap" href="/guides/model-swap" description="Decide a model or provider swap from recorded calls, without a gold set." />
+  <Card icon={<GraduationCap />} title="Distil a task" href="/guides/distil-a-task" description="From recorded answers to a gated student, end to end." />
+  <Card icon={<CloudArrowUp />} title="Serve with LiteLLM" href="/guides/serve-with-litellm" description="off, shadow, serve and rollback behind the task's own name." />
+  <Card icon={<Pulse />} title="Monitor a task" href="/guides/monitor-a-task" description="Canaries, drift checks and the endpoint watchdog." />
+  <Card icon={<FileArrowDown />} title="Import traces" href="/guides/import-traces" description="Langfuse, Braintrust, OpenTelemetry, LiteLLM, JSONL, DeepEval, Inspect and Promptfoo." />
+  <Card icon={<Terminal />} title="CLI reference" href="/reference/cli" description="Every modelstill command and flag." />
+  <Card icon={<Code />} title="API reference" href="/api-reference" description="The REST API the dashboard, the CLI and the MCP server use." />
+  <Card icon={<Robot />} title="MCP & AI agents" href="/ai-agents/mcp" description="Read tasks, evals and gates from Claude Code or Cursor." />
+</Cards>

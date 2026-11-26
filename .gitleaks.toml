@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Training artifact IDs are content hashes, not secrets"
+regexTarget = "match"
+regexes = ['''key:\s*"t-[0-9a-f]{8}-[0-9a-f]{8}-s[0-9]+"''']

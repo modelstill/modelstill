@@ -1,0 +1,121 @@
+---
+title: Regression-test prompt and model changes in CI
+description: Regression testing for LLM features - run evals in CI with GitHub Actions on every pull request, post the release gate as one sticky comment, and fail the job when a prompt or model change regresses.
+icon: GitPullRequest
+---
+
+Every prompt edit and model update can break cases that used to pass. This page runs the release gate on each pull request, so a regression fails the build before it ships.
+
+`modelstill report gate` decides a task's gate from a run history file, without the API, and prints it as Markdown or JSON. The composite GitHub Action `.github/actions/modelstill-gate` in the ModelStill repository runs it on a pull request, posts the report as a comment and fails the job when the gate fails.
+
+## Try it locally first
+
+```bash title="Terminal"
+modelstill report gate evals/history.jsonl <run> --spec tasks/<task>/spec.yaml \
+  --previous <baseline-run> --flip-rate 0.004 --cost-ratio 0.31 --p95-latency-ms 870 \
+  --format markdown
+```
+
+The report lists every check with its threshold, measured value, interval and result, then the paired comparison against the baseline (difference with its bootstrap interval, verdict, fixed and broken counts) and the worst regressed cases (`--top`, default 5).
+
+| Exit code | Meaning |
+|---|---|
+| `0` | every check passed |
+| `2` | the gate failed; the report is still printed |
+| `1` | an error: unknown run, bad spec, or a `max_regression` gate without `--previous` |
+
+`--format json` prints the same decision as JSON (`passed`, `run`, `previous`, `metric`, `checks[]`, `comparison`, `regressions`). Store it next to the run if the decision must be re-read later.
+
+<Callout type="warn">
+Flip rate, cost ratio and p95 latency are measured outside ModelStill. A value you did not measure must be passed at a failing worst case (for example `--flip-rate 1`), never at a passing one. The report shows such checks as "not sampled".
+</Callout>
+
+## Wire it into a repository
+
+<Steps>
+
+<Step>
+
+### Add the workflow
+
+```yaml title=".github/workflows/modelstill-gate.yml"
+name: ModelStill gate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: modelstill-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Record the candidate run
+        id: candidate
+        run: python scripts/record_eval.py --history evals/history.jsonl >> "$GITHUB_OUTPUT"
+
+      - uses: <owner>/modelstill/.github/actions/modelstill-gate@<commit-sha>
+        with:
+          spec: tasks/<task>/spec.yaml
+          history: evals/history.jsonl
+          run: ${{ steps.candidate.outputs.run }}
+          baseline: ${{ vars.MODELSTILL_BASELINE_RUN }}
+          flip-rate: ${{ steps.candidate.outputs.flip_rate }}
+          cost-ratio: ${{ steps.candidate.outputs.cost_ratio }}
+          p95-latency-ms: ${{ steps.candidate.outputs.p95_latency_ms }}
+          python-version: "3.12"
+```
+
+Pin the action by a full commit SHA.
+
+</Step>
+
+<Step>
+
+### Record the candidate
+
+Your step before the action records the candidate run in the history file and prints `run=<id>`, `flip_rate=...`, `cost_ratio=...` and `p95_latency_ms=...` to `$GITHUB_OUTPUT`. `scripts/record_eval.py` is yours to write; see [Benchmarks, datasets and history](/concepts/benchmarks-and-history) for recording a run.
+
+</Step>
+
+<Step>
+
+### Set the baseline
+
+Set the repository variable `MODELSTILL_BASELINE_RUN` to the accepted baseline run id (`modelstill eval accept`), and update it when you accept a new one.
+
+</Step>
+
+</Steps>
+
+The job needs only `pull-requests: write` and `contents: read`. No provider key goes into the workflow: the gate reads only the history file.
+
+## The action
+
+| Input | Meaning |
+|---|---|
+| `spec`, `history`, `run`, `baseline` | the task spec, the history file, the candidate and the baseline |
+| `flip-rate`, `cost-ratio`, `p95-latency-ms` | measured values |
+| `primary-metric` | a named metric to gate on |
+| `python-version` | default `3.12` |
+| `package` | what to install, default `modelstill==0.1.0`; until a release is on PyPI use a pinned git URL such as `modelstill @ git+https://...@<sha>#subdirectory=python/modelstill` |
+| `working-directory`, `github-token` | defaults: the workspace and `github.token` |
+
+It installs uv, installs `package` into a virtualenv, writes the report to the job summary, and on `pull_request` events posts it as a comment, or edits the earlier one. The comment is found by its hidden first line `<!-- modelstill-gate -->`, so each pull request keeps one comment. Then it fails the job when the gate failed. Inputs reach the scripts only through `env`, so a branch name cannot inject shell.
+
+Pull requests from forks get a read-only token, so the comment step fails there; the report is still in the job summary. Do not switch to `pull_request_target` unless the eval step never runs code from the fork.
+
+## Without GitHub
+
+Any CI can run `modelstill report gate` and use its exit code. The [pytest plugin](/integrations/pytest) and `modelstill import --gate` also exit 1 on a failed gate.

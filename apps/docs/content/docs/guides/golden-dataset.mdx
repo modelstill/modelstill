@@ -1,0 +1,144 @@
+---
+title: Build a golden dataset from production traces
+description: Turn real calls into a versioned golden dataset - import traces, let two teacher models answer, send their disagreements to human review, export benchmark JSONL and gate every change on it.
+icon: Database
+---
+
+A golden dataset is a set of cases with answers people have checked. Built from production traces, it tests the inputs your users really send. This guide goes from logged calls to a versioned set that every prompt and model change is gated on.
+
+<Steps>
+
+<Step>
+
+### Import traces
+
+Read the calls you already log into a dataset file:
+
+```bash title="Terminal"
+modelstill ingest langfuse --from 2026-11-01T00:00:00Z --name <observation-name> --out data/records.jsonl
+```
+
+The same works for Braintrust, OpenTelemetry GenAI spans, LiteLLM spend logs and any JSONL. Rows with the same input are merged, and each row keeps its source ids. See [Import traces](/guides/import-traces) and the [integrations](/integrations/langfuse).
+
+A Braintrust dataset that already holds expected answers can skip to step 4: `modelstill ingest braintrust --dataset-id <id> --cases golden.jsonl --out data/records.jsonl` also writes those rows as benchmark cases.
+
+</Step>
+
+<Step>
+
+### Let two teachers answer
+
+Ask two teacher models from different families to answer every input. `modelstill.data.label` calls them, keeps every answer under `outputs`, and marks an item as a disagreement when the answers differ:
+
+```python title="label.py"
+from pathlib import Path
+
+from modelstill.data import DatasetStore, label
+
+store = DatasetStore(Path("data/records.jsonl"))
+report = label(store.load(), {"teacher-a": ask_a, "teacher-b": ask_b}, same_answer)
+store.save(report.items)
+print(report.agreed, report.disagreed, report.failed)
+```
+
+- Each teacher is your function `input -> str`. `same_answer(a, b) -> bool` decides when two answers count as the same, for example after parsing JSON.
+- Every answer on the item is compared, including the one recorded from production.
+- An item that is already accepted or corrected is never asked again.
+
+Any script that writes the answers under `outputs` works too.
+
+</Step>
+
+<Step>
+
+### Send disagreements to people
+
+```bash title="Terminal"
+modelstill push review data/records.jsonl --task <task>
+```
+
+Items whose answers differ go to the [review queue](/dashboard/review). Items whose answers agree are stored as not needing review. A human decision is never overwritten by a later push.
+
+In the queue a person sees the answers side by side. **Correct** stores the answer they write as the item's final answer. **Accept** marks the item as decided but does not record which answer was right, so use **Correct** for an item you want in the golden set.
+
+</Step>
+
+<Step>
+
+### Make it a versioned case dataset
+
+On the [Datasets](/dashboard/datasets) page, press **New dataset**. Then add the cases:
+
+- Read the decided items with `GET /v1/tasks/{slug}/dataset-items?state=corrected`. Each item has its `inputHash`, `input` and the reviewer's `finalOutput`.
+- Save them as JSONL and **Import** the file, mapping `input` to **Input**, `finalOutput` to **Expected** and `inputHash` to **Case id**. Or post them with `POST /v1/tasks/{slug}/datasets/{name}/rows`.
+
+There is no button that copies labelled items into a case dataset yet.
+
+Every change writes a new version, and old versions stay readable. Edit a case when a reviewer finds a mistake, and the change is recorded in that row's history. See the [Datasets API](/api-reference/datasets).
+
+</Step>
+
+<Step>
+
+### Export it as benchmark JSONL
+
+Press **Export JSONL**, or:
+
+```bash title="Terminal"
+curl "http://localhost:8787/v1/tasks/<task>/datasets/<name>/export?version=3" \
+  -H "Authorization: Bearer $MODELSTILL_API_KEY" -o golden.jsonl
+```
+
+The file loads with `load_benchmark` and has the same version hash as in the dashboard. Commit it next to the spec, so a pull request that changes the set is reviewed like code.
+
+</Step>
+
+<Step>
+
+### Keep it out of training
+
+If you also train on the same traces, leave the golden cases out of the training split:
+
+```python title="split.py"
+from modelstill.data import split
+
+parts = split(store.load(), {"train": 0.9, "val": 0.1}, seed="v1", exclude=golden_ids)
+```
+
+`exclude` matches input hashes and source ids. If an excluded item lands in `train`, `split` raises `LeakageError`. Using `inputHash` as the case id in step 4 makes the golden ids easy to pass.
+
+</Step>
+
+<Step>
+
+### Accept a baseline and gate on it
+
+Score today's model on the set, record the run and accept it as the baseline:
+
+```python title="record.py"
+from pathlib import Path
+
+from modelstill.benchmark import History, load_benchmark
+from modelstill.evals import exact_match, run
+
+benchmark = load_benchmark(Path("golden.jsonl"))
+result = run(benchmark.cases, current_model, exact_match)
+History(Path("history.jsonl")).record(benchmark, "current-model", result)
+```
+
+```bash title="Terminal"
+modelstill eval runs history.jsonl
+modelstill eval accept history.jsonl <run>
+```
+
+Each later candidate runs on the same set and is compared with the baseline case by case. Runs are only compared when they ran on the same version of the set, so a changed set never mixes with an old baseline. When you add cases, record and accept a new baseline on the new version.
+
+</Step>
+
+</Steps>
+
+## Then
+
+- Run the gate on every pull request: [Regression-test prompt and model changes in CI](/guides/ci-gate).
+- Score open-ended answers with a judge you have checked against these labels: [Use an LLM as a judge](/guides/llm-as-a-judge).
+- See [Benchmarks, datasets and history](/concepts/benchmarks-and-history) for the file formats and how versions tie them together.

@@ -1,0 +1,59 @@
+---
+title: Train on your own GPU host
+description: Train, export and serve a student on a GPU machine you reach over SSH, as detached systemd user units.
+icon: HardDrives
+---
+
+The `remote` backend runs training on an SSH host with NVIDIA GPUs. Your laptop only sends the code and data and collects the artifact.
+
+## Before you start
+
+- SSH access to the host by name, for example `gpu-host`, without a password prompt.
+- The host's user has systemd user lingering on, so jobs outlive the SSH session.
+- Run one remote job at a time. Every job first syncs `python/modelstill` to `~/modelstill/python/modelstill` on the host with `--delete`, which would change the code under a running job.
+
+## Train
+
+```bash title="Terminal"
+modelstill train run tasks/<task>/spec.yaml \
+  --train data/sft_train.jsonl --val data/sft_val.jsonl --seed 1 \
+  --base Qwen/Qwen3-4B --epochs 2 --eval-steps 400 --max-seq-length 4096 \
+  --batch-size 1 --gradient-accumulation 2 --gradient-checkpointing \
+  --backend remote --host gpu-host --gpus 0,1,2
+```
+
+- `--gpus 0,1,2` trains with one process per GPU.
+- `--stop-service <name>` stops a systemd user service that holds the GPUs for the run and restarts it afterwards, whether the job succeeded or failed. Repeat it for several services.
+- The first run of a base model downloads it into the host's Hugging Face cache.
+- A stopped run resumes from its latest checkpoint when the same command runs again: the same plan gives the same artifact path.
+- The artifact comes back to `--output-root` (default `artifacts/`) with `artifact.json`, `attestation.json` and `log_history.json`. A copy stays on the host under `~/modelstill/adapters/`.
+
+Jobs are systemd user units named `modelstill-train-*`, `modelstill-export-*` and `modelstill-serve-*`. Logs are in `~/modelstill/runs/<id>.log` and `~/modelstill/serve/<port>.log` on the host.
+
+```bash title="Terminal"
+ssh gpu-host 'systemctl --user list-units "modelstill-*"'
+```
+
+## Export
+
+```bash title="Terminal"
+modelstill export artifacts/<task>/<version> --to peft --out out/peft
+modelstill export artifacts/<task>/<version> --to gguf --outtype q8_0 --out out/gguf --host gpu-host --gpu 1
+```
+
+`merged` and `gguf` load the model, so they run on the host. GGUF uses the host's llama.cpp checkout (`--llama-cpp`, default `~/Projects/llama.cpp`).
+
+## Serve and sample
+
+vLLM runs in its own environment on the host, `~/modelstill/serve/.venv`.
+
+```bash title="Terminal"
+modelstill serve up artifacts/<task>/<version> --host gpu-host --gpu 1 --port 8100
+ssh -N -L 8100:localhost:8100 gpu-host
+modelstill sample <served-name> --prompts prompts.jsonl --out out.jsonl --top-logprobs 5
+modelstill serve down --host gpu-host --port 8100
+```
+
+`serve up` uses the same settings as the Modal deployment (bf16, 8,192 context, LoRA modules, log-probs, thinking off), listens on the host's loopback only and needs the key in `~/.config/modelstill/student.key`. It prints the tunnel command. Several artifacts on one base are served together; a merged artifact is served alone.
+
+Score the served model with `modelstill swap` or your own eval script, then [gate it](/dashboard/gates).

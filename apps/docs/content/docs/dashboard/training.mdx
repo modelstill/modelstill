@@ -1,0 +1,39 @@
+---
+title: Training console
+description: Every training run of a task with its loss and eval curves by step, pushed after training or reported live while it trains.
+icon: GraduationCap
+---
+
+**Training** lists every run pushed for the task, newest first: run key, status (`running`, `succeeded`, `failed`), method, base model, eval loss, eval reward and start time. While a run is `running`, the list and the run page refresh every 10 seconds.
+
+A run's key is its artifact's served name, `<task>-<snapshot8>-<manifest8>-s<seed>`. It is the immutable artifact path, so the same key always means the same weights.
+
+## A run's page
+
+- train loss, eval loss and eval reward by step, plus learning rate and gradient norm when the run logged them;
+- base, method, start, finish, duration and final metrics;
+- the manifest and the attestation (hashes of the training and validation files);
+- quickstart and export snippets for the artifact.
+
+## Push a finished artifact
+
+```bash title="Terminal"
+export MODELSTILL_API_URL=http://localhost:8787 MODELSTILL_API_TOKEN=ms_live_your_key_here
+modelstill push train artifacts/<task>/<version> --task <task>
+```
+
+It reads `artifact.json`, `attestation.json` when present and `log_history.json`, marks the run `succeeded`, and sends every logged numeric value at its step. Pushing the same artifact again is harmless.
+
+## Report while training
+
+```python title="train.py"
+from modelstill.train.console import console_from_env
+
+console = console_from_env(task, key, base, method)
+if console:
+    console.start(manifest=manifest_dict)
+    console.on_log(step, epoch, logs)
+    console.finish("succeeded", metrics)
+```
+
+`console_from_env` returns `None` without `MODELSTILL_API_TOKEN`. Points are posted in batches of 50 or every 15 seconds, with a 5 second timeout. Nothing it does raises into training: a failed post is counted and retried on the next flush.

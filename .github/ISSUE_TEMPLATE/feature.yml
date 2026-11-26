@@ -1,0 +1,15 @@
+name: Feature request
+description: Suggest a check, metric, integration or workflow
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What release decision or eval task is hard today, and how you handle it now.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help

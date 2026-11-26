@@ -1,0 +1,2 @@
+{"id": "c1", "input": "All API requests have been failing with 503 for ten minutes.", "expected": "urgent"}
+{"id": "c2", "input": "Please add a dark mode some day.", "expected": "low"}

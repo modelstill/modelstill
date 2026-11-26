@@ -1,0 +1,73 @@
+---
+title: Braintrust
+description: Read Braintrust project logs and datasets into a ModelStill dataset, and record Braintrust experiments as runs, from an export file or the REST API.
+icon: FileArrowDown
+---
+
+```bash title="Terminal"
+modelstill ingest braintrust logs.json --out data/braintrust.jsonl
+
+export BRAINTRUST_API_KEY=your-braintrust-api-key
+modelstill ingest braintrust --project-id <project-id> --out data/braintrust.jsonl
+modelstill ingest braintrust --dataset-id <dataset-id> --out data/braintrust.jsonl --cases golden.jsonl
+modelstill import braintrust --experiment-id <experiment-id> --history runs.jsonl --task <task> --scorer <score>
+```
+
+Keep the key in your secret store and pass it through the environment, never on the command line. The reader only calls the fetch endpoints, which do not change anything.
+
+## Flags
+
+| Flag | Meaning |
+|---|---|
+| `<file>` | an export file instead of the API: JSON, JSON lines or `.jsonl.gz` |
+| `--project-id` | `ingest`: fetch this project's logs |
+| `--dataset-id` | `ingest`: fetch this dataset |
+| `--experiment-id` | `import`: fetch this experiment |
+| `--span-type` | `ingest`: take every span of this type, for example `llm`, instead of root spans |
+| `--cases` | `ingest`: also write rows that have an `expected` value as benchmark cases |
+| `--scorer` | `import`: the score that gives the case score; required when the experiment has several |
+| `--model` | `import`: the model name to record, default `metadata.model` |
+| `--api-url` | default `$BRAINTRUST_API_URL`, else `https://api.braintrust.dev` |
+| `--page-size` | the fetch `limit`, default 100 |
+| `--out` | `ingest`: the dataset JSONL to merge into |
+
+Give exactly one source: a file or one id. `import braintrust` also takes the usual `--history`, `--task`, `--accept` and `--gate` flags; see [Import traces](/guides/import-traces).
+
+## Export files
+
+Any of these work:
+
+- the JSON a logs, experiment or dataset download gives: an array of rows;
+- a fetch response, `{"events": [...], "cursor": "..."}`;
+- a SQL query result from `POST /btql`, `{"data": [...], "schema": {...}}`;
+- JSON lines, from `/btql` with `fmt: "jsonl"` or a cloud storage export, gzipped or not.
+
+A row id that appears more than once keeps its highest `_xact_id`, and rows marked `_object_delete` are dropped.
+
+## How it reads the API
+
+- `POST /v1/project_logs/{project_id}/fetch`, `POST /v1/dataset/{dataset_id}/fetch` or `POST /v1/experiment/{experiment_id}/fetch`, with `Authorization: Bearer $BRAINTRUST_API_KEY` and a body of `{"limit": N, "cursor": "..."}`.
+- It sends each page's `cursor` back until a page is empty or has no cursor.
+- Pages run from latest to earliest and can repeat an older version of a row, so only the first copy of each `id` is kept.
+- `limit` counts traces, so a page can hold more rows than `--page-size`.
+- For the EU data plane use `--api-url https://api-eu.braintrust.dev`. A self-hosted data plane takes its own URL.
+
+## Rows into a dataset
+
+- Root spans by default: `is_root`, else no `span_parents`, else `span_id` equal to `root_span_id`.
+- Each output is keyed by `metadata.model`, or `braintrust:<span name>` when that is empty.
+- An OpenAI-style `choices` output gives its first message. A row with an `error` becomes an error output.
+- Dataset rows have no output, so they record inputs only. With `--cases`, rows with an `expected` value are written as benchmark cases (`id`, `input`, `expected`, `tags`).
+- Provenance keys are `id`, `span_id` and `root_span_id`.
+
+## An experiment into a run
+
+| Case | Case score | Other metrics | Latency |
+|---|---|---|---|
+| `origin.id` (the dataset row), else a hash of `input` | the `--scorer` score, mean over trials | every other score | `metrics.end - metrics.start` |
+
+- Only root spans count, so scorer and LLM subspans are skipped.
+- Trials of one dataset row are averaged into one case, so two experiments over the same dataset pair case by case in `modelstill eval compare`.
+- An errored row with no score counts as 0.
+
+If you get `the experiment has several scores; pick one`, add `--scorer` with one of the names it lists.

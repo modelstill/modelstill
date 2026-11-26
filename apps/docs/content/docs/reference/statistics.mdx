@@ -1,0 +1,72 @@
+---
+title: Statistics
+description: The intervals, paired comparisons and tests ModelStill reports, and why each one was chosen.
+icon: Sigma
+---
+
+Every score ModelStill reports carries a 95% interval. Test sets are often a few hundred items, so intervals are exact or resampled, never the normal approximation.
+
+## A run's score
+
+| Scores | Interval |
+|---|---|
+| all 0 or 1 (pass/fail) | exact Clopper-Pearson |
+| anything else (set F1, judge scores, means over repeats) | percentile bootstrap, 2,000 rounds, seed 0 |
+
+The bootstrap is seeded, so the same scores always give the same interval. `micro_f1` reports pooled F1 with its own interval; push it as a named metric and make it the primary metric.
+
+## Comparing two runs
+
+Two runs are compared only on the cases both scored, in the same order. The **paired difference** is the mean of after minus before per case, with a seeded percentile bootstrap interval of those per-case differences.
+
+| Verdict | When |
+|---|---|
+| `better` | the interval's lower bound is above 0 |
+| `worse` | the interval's upper bound is below 0 |
+| `no_detectable_difference` | otherwise |
+
+The mean alone never sets the verdict. **Fixed** cases scored higher after, **broken** cases lower. The API also returns an exact two-sided sign test of fixed against broken; unchanged cases do not count.
+
+Pairing matters: case difficulty varies far more than the change you are measuring, and comparing each case with itself removes that variance.
+
+## The gate
+
+| Check | Measured value |
+|---|---|
+| `metric_lower_bound` | the lower bound of the run's interval |
+| `regression_vs_baseline` | the lower bound of the paired difference against the accepted baseline |
+| `flip_rate`, `cost_ratio`, `p95_latency_ms` | measured outside ModelStill and passed in |
+
+Using lower bounds means a small set cannot pass on a lucky mean. The gate is relative to the accepted baseline by default (`max_regression`), so a student is held to the model it replaces, not to an absolute number.
+
+## Judges
+
+- `judge_agreement` gives the judge's accuracy against human labels with an exact interval, Cohen's kappa, false passes and false fails.
+- `stability` re-asks the judge and reports how often its verdict flips.
+- `corrected_score` combines many judge scores with a few human labels (prediction-powered inference), so the judge's bias does not move the reported score.
+
+## Pairwise preference
+
+`modelstill eval pairwise` asks a judge to pick A, B or a tie for each case, once in each order. A verdict counts only when both orders agree; otherwise the case is an inconsistent tie.
+
+| Number | How |
+|---|---|
+| win rate | wins of the later run over decisive cases (ties left out), with an exact Clopper-Pearson interval |
+| sign test | exact two-sided binomial test of wins against losses |
+| inconsistency rate | cases whose verdict flipped with the order, with an exact Clopper-Pearson interval |
+
+The verdict is `better` when the win-rate interval is above 0.5, `worse` when it is below, and `no_detectable_difference` otherwise. As a scorer, `parity_metric` scores 0 or 1 per case, so `run` gives it an exact interval too.
+
+## Model swaps
+
+The current model's agreement with itself is the **noise floor**. The gap between a candidate's agreement and the noise floor gets a paired bootstrap interval, and the swap decision reads its bounds. See [Check a model swap](/guides/model-swap).
+
+## Deferral threshold
+
+`modelstill serve calibrate` picks the lowest confidence cut-off whose accepted answers keep an exact upper bound on the error (one-sided, `--delta` 0.05) under `--target-error`. Too few accepted items cannot pass at all.
+
+## Monitoring
+
+- Canary pass rates get exact Clopper-Pearson intervals.
+- The watchdog compares a canary with its baseline using an exact one-sided McNemar test. With 10 items, 7 broken and none fixed is the smallest regression that reaches p &lt; 0.01.
+- Log-prob shift is tested with a one-sided sign-flip permutation test of today's shift minus the baseline's own noise, exact over every sign pattern while that is feasible and Monte Carlo with a seed otherwise.

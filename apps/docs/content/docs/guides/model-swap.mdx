@@ -1,0 +1,101 @@
+---
+title: Check a model swap
+description: Decide with one command and no gold set whether a task should move to another model or provider, by replaying recorded calls.
+icon: Swap
+---
+
+`modelstill swap` answers "does the candidate answer like the model we run today?" on your recorded production calls. Use it when a provider deprecates or reprices the model behind an alias, or when a cheaper model, provider or precision is on offer. Whether the answers are *right* is the release gate's job.
+
+## Inputs
+
+- **Spec:** supplies the system prompt (`instruction`), the agreement metric (from the gate metric's requirement type), the margin (`eval.gate.max_regression`) and the LiteLLM alias (`serve.litellm_alias`).
+- **Records:** a dataset JSONL, for example from `modelstill ingest`. An answer stored under the `production` output is used for an extra "agreement with recorded" figure.
+- **Messages:** an input that holds `messages` is sent as is. Any other input becomes `[system: instruction, user: input]`. A task with its own layout passes `--prompt module:attr`, a function `(system, input) -> messages`.
+- **Endpoint:** `--base-url` is any OpenAI-compatible URL, normally your LiteLLM proxy. The key is read from the variable named by `--api-key-env` (default `LITELLM_API_KEY`).
+
+## Run it
+
+```bash title="Terminal"
+export LITELLM_API_KEY=sk-your-proxy-key
+modelstill swap tasks/<task>/spec.yaml \
+  --records data/records.jsonl \
+  --current <current-model> \
+  --candidate <candidate-model> \
+  --candidate <candidate-model>@http://gpu-host:8000 \
+  --base-url http://localhost:4000 \
+  --sample 300 --repeats 2 \
+  --litellm-config litellm-config.yaml \
+  --history runs/swap-history.jsonl --out runs/swap.json
+```
+
+With `--out` it prints a short summary and the LiteLLM change, and writes the full JSON report to the file. It makes `sample x (repeats + candidates)` calls: 300 records, 2 repeats and 2 candidates is 1,200 calls.
+
+## What it measures
+
+1. The current model answers every record `--repeats` times at `--temperature` (default 0). Its first answers are the reference.
+2. **Noise floor:** each later run of the current model, scored against the reference. See [Measure a noise floor](/guides/noise-floor).
+3. **Agreement:** each candidate answers once, scored against the same reference with the same metric.
+4. **Gap:** a paired bootstrap of candidate minus floor per record (2,000 rounds, seed 0), with fixed and broken counts.
+
+| `--metric` | Compares |
+|---|---|
+| `set_f1` | both answers as JSON sets (a list, or the one list inside an object) |
+| `json` | parsed JSON equality; the default for `exact`, `label` and `pass_fail` requirements |
+| `exact` | text after trimming whitespace |
+| `module:attr` | any `(output, reference) -> float` in `[0, 1]` |
+
+An HTTP error, an empty answer or (for `json` and `set_f1`) non-JSON counts as **unreadable**, scores 0, and is reported as a rate with an exact interval.
+
+**Cost** per 1,000 calls uses the token usage the endpoint returns and prices from `model_info` in `--litellm-config` or a `--prices` YAML:
+
+```yaml title="prices.yaml"
+<current-model>: {input_cost_per_token: 9.1e-8, output_cost_per_token: 1.82e-7}
+<candidate-model>@http://gpu-host:8000: {input_cost_per_token: 0, output_cost_per_token: 0}
+```
+
+**Latency** is reported as p50 and p95 of answered calls.
+
+## The decision
+
+The margin is `--margin`, else the gate's `max_regression`, else 0.02.
+
+| Decision | When |
+|---|---|
+| `switch` | the gap's lower bound is at least `-margin` and every limit holds |
+| `do_not_switch` | the gap's upper bound is below `-margin`, or a `--max-cost-ratio` / `--max-p95-latency-ms` limit fails (an unmeasured cost or latency fails) |
+| `inconclusive` | anything else: replay more records and run again |
+
+The run's decision is `switch` if any candidate switches. `choice` is the switching candidate with the lowest cost. Every check is stored with its threshold and measured value.
+
+## The LiteLLM change
+
+For the choice, the report holds `litellm.before`, `litellm.after` and `litellm.yaml`: the `model_list` entry for the alias. A candidate on its own URL becomes `model: openai/<model>`, `api_base: <url>`, `api_key: os.environ/<api-key-env>`. Apply it in the proxy config, keep the old entry for rollback, and reload the proxy.
+
+## A provider matrix
+
+Name the same model several times on different URLs, for example a bf16 server and an fp8 server next to the hosted provider:
+
+```bash title="Terminal"
+--candidate <model> \
+--candidate <model>@http://gpu-a:8000 \
+--candidate <model>-fp8@http://gpu-b:8000
+```
+
+Each gets its own agreement, gap, cost, latency and verdict against the same noise floor.
+
+## Recorded mode
+
+`--current recorded` uses each record's stored answer (key `production`, or `recorded:<key>`) as the current model's answer and never calls it. `--view module:attr` maps answers before scoring; `--stratify module:attr` reports agreement per group. `--max-cost-ratio` is refused here, because recorded answers carry no cost.
+
+## Push to the dashboard
+
+Every run appends to `--history` under the benchmark `swap-<task>`. Send a candidate's run with:
+
+```bash title="Terminal"
+modelstill push run runs/swap-history.jsonl <run-id> --task <task> --primary-metric agreement
+```
+
+## Limits
+
+- Agreement with today's model is not correctness. When the gap is negative, read the broken records before deciding.
+- Requests are replayed with `--temperature` and `--max-tokens` only, not the production request's other parameters.

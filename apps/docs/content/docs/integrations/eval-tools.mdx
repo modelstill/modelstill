@@ -1,0 +1,48 @@
+---
+title: DeepEval, Inspect and Promptfoo
+description: Record other eval tools' results as ModelStill runs, then compare them case by case and gate them with intervals.
+icon: Scales
+---
+
+`modelstill import` keeps each tool's own verdicts. ModelStill does not re-score anything; it adds intervals (Clopper-Pearson for pass/fail, bootstrap for fractional scores), the paired comparison and the gate.
+
+<Tabs items={["DeepEval", "Inspect", "Promptfoo"]}>
+
+```bash tab="DeepEval"
+modelstill import deepeval .deepeval/.latest_run_full.json --history runs.jsonl --task <task> --accept
+```
+
+```bash tab="Inspect"
+modelstill import inspect logs/run.eval --history runs.jsonl --task <task> --scorer <name>
+```
+
+```bash tab="Promptfoo"
+modelstill import promptfoo results.json --history runs.jsonl --task <task> \
+  --gate tasks/<task>/spec.yaml --flip-rate 0 --cost-ratio 1
+```
+
+</Tabs>
+
+| Tool | Case | Case score | Other metrics |
+|---|---|---|---|
+| DeepEval | test case `name` | `success` (1 or 0) | each `metricsData[].score` |
+| Inspect | sample `id` | the scorer's value, mean over epochs | other scorers, `scorer.key` for dict values |
+| Promptfoo | `testCase.description`, else `test-<testIdx>` | `success`, mean over repeats | `score` and each `namedScores` |
+
+Two files over the same cases get the same benchmark version, so `modelstill eval compare` pairs them and the gate finds the accepted baseline. If two cases in a file share a name, ids fall back to `name:<hash of input and expected>`.
+
+## DeepEval
+
+Reads the `TestRun` JSON: `test_run_<timestamp>.json` from `DEEPEVAL_RESULTS_FOLDER`, `.deepeval/.latest_run_full.json`, `.deepeval/.temp_test_run_data.json`, or `.deepeval/.latest_test_run.json`. Test cases no metric ran on are left out. A metric error fails the case. Latency is `completionTime`. The model is `hyperparameters.model` unless `--model` is given.
+
+## Inspect
+
+Reads `.eval` (a zip) and `.json` logs, including a run still in progress. The first scorer is the case score unless `--scorer name` or `--scorer name.key` says otherwise. Values map to numbers as Inspect does: C 1, I 0, P 0.5, N 0, yes/true 1, no/false 0. Epochs are averaged into one case. An errored epoch with no score counts 0. Latency is the mean `total_time`.
+
+## Promptfoo
+
+Reads the `--output results.json` file or a bare summary. Each provider and prompt column becomes its own run, named by the provider label or id; `--provider` keeps one. Repeats are averaged into one case. Latency is `latencyMs`.
+
+## Gating
+
+`--gate` needs `--flip-rate` and `--cost-ratio`, because eval files do not measure them. p95 latency is measured from the file unless you pass `--p95-latency-ms`. A failed gate exits 1. See [Import traces and eval results](/guides/import-traces).

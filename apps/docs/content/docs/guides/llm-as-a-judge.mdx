@@ -1,0 +1,121 @@
+---
+title: Use an LLM as a judge, checked against people
+description: LLM-as-a-judge with ModelStill - a rubric judge from another model family, its agreement with human labels, its stability, a corrected score and a pairwise judge that is asked in both orders.
+icon: Gauge
+---
+
+An LLM judge is useful only when you know how often it agrees with people. ModelStill gives you the judge and the numbers to check it: agreement with human labels, Cohen's kappa, how often the verdict flips, and a score corrected by a few human labels.
+
+For the other scorers (exact match, set F1, JSON equality, your own function), see [Write a scorer](/guides/write-a-scorer).
+
+## Pick a judge from another family
+
+A judge tends to prefer answers from its own model family. If it shares a family with the teacher that labelled the data, the student is graded by its teacher's taste. ModelStill refuses that in three places:
+
+- `modelstill spec validate` refuses a spec whose `eval.judge` family is a teacher family.
+- `JudgePanel` refuses a judge from a teacher family, and holds at most one judge per family.
+- `PairwiseJudge` comparisons and `parity_metric` take `teacher_families` and refuse an overlap.
+
+`LLMJudge` on its own does not check. Call `check_independent([judge.family], teacher_families)` before you use a single judge, or put it in a one-judge panel.
+
+## Write the judge
+
+```python title="judge.py"
+from modelstill.evals import run
+from modelstill.judges import JudgePanel, LLMJudge, as_metric
+
+judge = LLMJudge(model, family, instructions, complete)
+panel = JudgePanel([judge], teacher_families={"qwen", "openai"})
+result = run(cases, student, as_metric(panel))
+```
+
+- `complete` is your function `(model, messages) -> str` that calls the judge model. You choose the provider and the temperature.
+- The judge gets your `instructions` as the system message, with "End your reply with PASS or FAIL." added. The user message holds the reference answer and the output.
+- The last PASS or FAIL in the reply is the verdict. A reply with neither raises `JudgeError`. `run` does not catch errors from a scorer, so the run stops.
+- `as_metric` turns a judge or a panel into a scorer that gives 1 for PASS and 0 for FAIL. Pass/fail scores get an exact Clopper-Pearson interval.
+- A `JudgePanel` with several judges passes an output when more than half of them pass it. A tie fails.
+
+## Check it against people
+
+Have people label a sample of the same outputs as pass or fail. Then compare:
+
+```python title="agreement.py"
+from modelstill.evals import judge_agreement
+
+agreement = judge_agreement(judge_verdicts, human_labels)
+print(agreement.accuracy, agreement.low, agreement.high, agreement.kappa)
+print(agreement.false_pass, agreement.false_fail)
+```
+
+Both lists are booleans for the same items in the same order.
+
+| Field | Meaning |
+|---|---|
+| `accuracy`, `low`, `high` | share of items where the judge and the person agree, with an exact Clopper-Pearson interval |
+| `kappa` | Cohen's kappa: agreement beyond what the two pass rates give by chance |
+| `false_pass` | items the judge passed and the person failed |
+| `false_fail` | items the judge failed and the person passed |
+
+Read kappa before accuracy. When most outputs pass, a judge that passes everything has high accuracy and a kappa near 0. False passes matter most for a release gate: each one is a bad answer that the judge let through.
+
+## Gate on kappa
+
+The spec's gate has no kappa field. Add your own check next to the gate's checks, with a floor you choose:
+
+```python title="gate_kappa.py"
+from modelstill.gate import Check, Decision, decide
+
+decision = decide(spec.eval.gate, measured)
+kappa = Check("judge_human_kappa", 0.6, agreement.kappa, agreement.kappa >= 0.6)
+decision = Decision(checks=(*decision.checks, kappa))
+```
+
+`decision.passed` is false when any check fails, so a judge that no longer agrees with people fails the release. `POST /v1/tasks/{slug}/gates` stores any named check with its threshold and value. `modelstill report gate` and `modelstill push gate` decide only the spec's checks, so they do not add this one for you.
+
+## Check that it is stable
+
+```python title="stability.py"
+from modelstill.judges import stability
+
+found = stability(judge, items, repeats=3)
+print(found.flip_rate, found.unstable, found.items)
+```
+
+`items` is a list of `(output, expected)` pairs. Each item is judged `repeats` times (at least 2). An item is unstable when its verdicts differ. `flip_rate` is the share of unstable items. A judge that flips often adds noise to every score it gives.
+
+## Correct the score with a few human labels
+
+A judge can be biased in one direction. `corrected_score` uses a few human labels to remove that bias from the judge's score over many items (prediction-powered inference):
+
+```python title="corrected.py"
+from modelstill.judges import corrected_score
+
+estimate = corrected_score(judge_scores, human_labels)
+print(estimate.value, estimate.low, estimate.high)
+```
+
+- `judge_scores` maps an item id to the judge's score for every judged item.
+- `human_labels` maps an item id to a person's pass or fail. Every labelled id must also be judged.
+- It needs at least two labelled and two unlabelled items. The result carries a 95% interval.
+
+## Compare two runs with a pairwise judge
+
+`PairwiseJudge` picks the better of two answers to the same input: A, B or TIE. It asks twice, once in each order, and keeps a verdict only when both orders agree. A verdict that follows the position becomes an inconsistent tie, so position bias cannot create wins.
+
+```bash title="Terminal"
+modelstill eval pairwise runs.jsonl <before> <after> --spec tasks/<task>/spec.yaml \
+  --base-url http://localhost:4000 --api-key-env LITELLM_API_KEY
+```
+
+- The judge is the spec's `eval.judge`, or `--judge-model` and `--judge-family` with `--teacher-family` for each teacher. A judge from a teacher's family is refused.
+- The judge is called at temperature 0 through any OpenAI-compatible URL. `--instructions` replaces the default rubric.
+- It prints wins for each run, ties, the later run's win rate over decisive cases with an exact interval, a sign test, and the inconsistency rate with its own exact interval.
+
+A high inconsistency rate means the judge cannot tell the answers apart. Trust the win rate less.
+
+From Python, `pairwise_compare(judge, cases, teacher_families=...)` gives the same numbers with every per-case verdict, and `parity_metric` turns a pairwise judge into a scorer for `run`. See [Write a scorer](/guides/write-a-scorer#a-pairwise-judge) for an example and [Statistics](/reference/statistics) for how each number is computed.
+
+## Then
+
+- Put the judged run behind the release gate: [Regression-test prompt and model changes in CI](/guides/ci-gate).
+- Collect the human labels from real traffic: [Build a golden dataset from production traces](/guides/golden-dataset).

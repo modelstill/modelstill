@@ -1,0 +1,105 @@
+---
+title: MCP server
+description: Let Claude Code, Claude or Cursor read ModelStill tasks, evals, gates, review queues, serving and training runs, decide review items and change a task's serving mode.
+icon: Robot
+---
+
+The ModelStill MCP server (`apps/mcp`) speaks Streamable HTTP. It holds no data and no database connection: every tool is one or two calls to the ModelStill API with your own credential, and the API decides what you may do.
+
+## Run it
+
+```bash title="Terminal"
+cd apps/api && bun run dev
+cd apps/mcp && bun run dev
+curl -s localhost:3104/healthz
+```
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `MODELSTILL_API_URL` | `http://localhost:8787` | the API every tool calls, and where OAuth tokens are checked |
+| `PUBLIC_URL` | `http://localhost:$PORT` | the URL clients reach this server at; it goes into `WWW-Authenticate` and the protected-resource metadata |
+| `PORT` | `3104` | listen port |
+| `MCP_UNAUTH_LIMIT` | `30` | refused requests per client IP per window before `/mcp` answers 429; `0` turns it off |
+| `MCP_UNAUTH_WINDOW_SECONDS` | `60` | the limiter window |
+| `MCP_DOCS_URL` | `$PUBLIC_URL/docs` | where 401 bodies point people; `/docs` on the server answers a plain-text setup guide |
+
+With Docker, from the repository root:
+
+```bash title="Terminal"
+docker build -f apps/mcp/ci/Dockerfile -t modelstill-mcp .
+docker run -p 3104:3104 -e MODELSTILL_API_URL=http://host.docker.internal:8787 modelstill-mcp
+```
+
+## Connect a client
+
+<Tabs items={["Claude Code", "Project .mcp.json", "Cursor"]}>
+
+```bash tab="Claude Code"
+claude mcp add --transport http modelstill http://localhost:3104/mcp --header "Authorization: Bearer ${MODELSTILL_API_KEY}"
+```
+
+```json tab="Project .mcp.json"
+{
+  "mcpServers": {
+    "modelstill": {
+      "type": "http",
+      "url": "http://localhost:3104/mcp",
+      "headers": { "Authorization": "Bearer ${MODELSTILL_API_KEY}" }
+    }
+  }
+}
+```
+
+```json tab="Cursor"
+{
+  "mcpServers": {
+    "modelstill": {
+      "url": "http://localhost:3104/mcp",
+      "headers": { "Authorization": "Bearer ${MODELSTILL_API_KEY}" }
+    }
+  }
+}
+```
+
+</Tabs>
+
+To sign in with OAuth instead of a key, leave out the header. The client follows the 401 to the dashboard sign-in and the consent page. The dashboard's **Settings > Connect via MCP** shows the same setup with your server URL.
+
+## Credentials
+
+- An API key (`ms_live_...`) in `Authorization: Bearer` or `x-api-key` is passed to the API unchecked.
+- Any other bearer is an OAuth access token. It is checked once per request at the API's `/api/auth/mcp/get-session`, then forwarded.
+- A refusal is `401` with `WWW-Authenticate: Bearer realm="modelstill", resource_metadata=".../.well-known/oauth-protected-resource"` and a body of `{error, hint, docs_url}`. That header starts the OAuth flow in Claude and Claude Code.
+- The API's admin token is not an `ms_live_` key, so the MCP server treats it as an OAuth token and refuses it. Use an API key.
+
+## Tools
+
+| Tool | Kind | Returns |
+|---|---|---|
+| `list_tasks` | read | every task: slug, version, snapshot hash, mode, deferral share, last gate result |
+| `get_task` | read | one task with all its versions |
+| `list_eval_runs` | read | eval runs, newest first, mean with 95% interval and every metric |
+| `compare_runs` | read | the paired difference of two runs with its bootstrap interval, verdict, fixed and broken counts and the number of paired cases |
+| `list_gates` | read | gate decisions with every check: threshold, measured value, passed |
+| `get_review_queue` | read | items waiting for a human, with teacher outputs and agreement |
+| `get_deployment` | read | mode, student model, threshold, target error, shadow sample, active since |
+| `get_traffic` | read | hourly totals served by the student, deferred and mismatched, p95 latencies, the deferral share and window totals |
+| `list_canaries` | read | canary runs: provider, passed of total, interval |
+| `list_alerts` | read | alerts: kind, severity, fired, acknowledged, payload |
+| `list_train_runs` | read | training runs: key, base, method, status, final metrics, times |
+| `get_train_run` | read | one run with each metric series summarised: points, first, last, best |
+| `decide_review_item` | write | accept an item, or correct it with `corrected_output` |
+| `set_deployment_mode` | write | set mode `off`, `shadow` or `serve`; rollback is mode `off` |
+
+Every tool takes a task slug except `compare_runs`, `decide_review_item` and `get_train_run`. Call `list_tasks` first.
+
+## Behaviour worth knowing
+
+- Every tool refuses arguments it does not declare, naming the one it most likely meant, before any API call.
+- Reads answered 429 are retried at most 3 times, waiting `Retry-After` capped at 2 s, never more than 8 s in all. Writes are sent exactly once; a failed write comes back with `retryable` and, on 429, `retry_after`.
+- Failures answer `isError: true` with `{error, message, next_step, retryable}`.
+- `set_deployment_mode` reads the current deployment and sends it back with only the mode and the fields you name changed, because the API's `PUT` replaces the whole record. It refuses `shadow` or `serve` without a student model, and a first `shadow` or `serve` without `target_error`.
+- `decide_review_item` records the reviewer as `modelstill-mcp` when the call names nobody.
+- `get_train_run` picks the better direction from the metric name: `loss`, `error` and `perplexity` are lower-is-better; `reward`, `acc`, `f1`, `score`, `precision`, `recall` and `exact` are higher-is-better; anything else gets `best: null`.
+
+`set_deployment_mode` changes the API's deployment record, which the dashboard shows. A LiteLLM plugin configured with the API (an `api` block) polls that record and applies it within its reload interval; a plugin without one keeps serving its deployment file. See [Serving modes](/concepts/serving-modes).

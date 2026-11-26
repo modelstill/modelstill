@@ -1,0 +1,136 @@
+---
+title: Task spec
+description: Every field of tasks/<task>/spec.yaml, what it is for, and the rules modelstill spec validate checks.
+icon: ListChecks
+---
+
+A task spec is one YAML file, by convention `tasks/<task>/spec.yaml`. Unknown keys are rejected at every level.
+
+```yaml title="tasks/<task>/spec.yaml"
+task: extract-technologies
+version: 1
+instruction: prompts/system.md
+output_schema: schemas/out.json
+requirements:
+  - id: correct_technologies
+    priority: p0
+    type: set_f1
+    instruction: Every named technology in the posting, merged by canonical product, and nothing else.
+  - id: correct_strength
+    priority: p1
+    type: label
+    instruction: Strength is required, preferred or mentioned, as the posting states it.
+labelling:
+  teachers:
+    - {model: <teacher-a>, family: <family-a>}
+    - {model: <teacher-b>, family: <family-b>}
+  disagreement: human_queue
+eval:
+  judge: {model: <judge>, family: <family-c>}
+  golden_set: data/gold.jsonl
+  gate:
+    metric: correct_technologies
+    max_regression: 0.02
+    max_flip_rate: 0.01
+    max_cost_ratio: 0.60
+    max_p95_latency_ms: 4000
+train:
+  base: Qwen/Qwen3-1.7B
+  method: lora
+  lora_r: 16
+  seeds: [1, 2, 3]
+serve:
+  litellm_alias: extract-technologies
+  fallback: extract-technologies-cloud
+  target_error: 0.05
+monitor:
+  canary: data/canary.jsonl
+  replay_frac: 0.3
+```
+
+## Top level
+
+| Field | Type | Rule |
+|---|---|---|
+| `task` | string | lowercase slug: a letter, then letters, digits, `-` and `_` |
+| `version` | integer | at least 1 |
+| `instruction` | path | the system prompt, relative to the spec |
+| `output_schema` | path | the JSON schema of an answer, relative to the spec |
+| `requirements` | list | at least one |
+| `labelling`, `eval`, `train`, `serve`, `monitor` | mappings | all required |
+
+## requirements
+
+| Field | Values |
+|---|---|
+| `id` | a name; the gate's `metric` must be one of them |
+| `priority` | `p0`, `p1`, `p2`, `p3` |
+| `type` | `exact`, `set_f1`, `pass_fail`, `label` |
+| `instruction` | what a correct answer means, in one sentence |
+
+The requirement type picks the default agreement metric for `modelstill swap`: `set_f1` for `set_f1`, JSON equality for the others.
+
+## labelling
+
+| Field | Values |
+|---|---|
+| `teachers` | at least two `{model, family}` entries |
+| `disagreement` | `human_queue` (default) or `drop` |
+
+## eval
+
+| Field | Meaning |
+|---|---|
+| `judge` | `{model, family}`; the family must differ from every teacher's family |
+| `golden_set` | where the gold set lives |
+| `gate.metric` | a requirement `id` |
+| `gate.lower_ci_min` | optional, 0 to 1: the run's interval lower bound must reach it |
+| `gate.max_regression` | optional, 0 to 1: the paired difference's lower bound must be at least minus this |
+| `gate.max_flip_rate` | 0 to 1 |
+| `gate.max_cost_ratio` | above 0 |
+| `gate.max_p95_latency_ms` | above 0 |
+
+A gate needs `lower_ci_min`, `max_regression` or both.
+
+## train
+
+| Field | Values |
+|---|---|
+| `base` | the base model id |
+| `method` | `lora`, `full` or `classifier` |
+| `lora_r` | optional, above 0 (16 when unset) |
+| `seeds` | at least one; one training run per seed |
+
+## serve
+
+| Field | Meaning |
+|---|---|
+| `litellm_alias` | the LiteLLM `model_name` callers send today |
+| `fallback` | the deployment that answers when the plugin fails |
+| `target_error` | between 0 and 1: the error rate the deferral threshold is calibrated for |
+
+## monitor
+
+| Field | Meaning |
+|---|---|
+| `canary` | a benchmark of known answers |
+| `replay_frac` | 0 to 1 |
+
+## What validate checks
+
+```bash title="Terminal"
+modelstill spec validate tasks/<task>/spec.yaml
+```
+
+- every field above, with its type and range, and no unknown keys;
+- the judge's family is not a teacher family;
+- the gate's metric is a requirement id;
+- the gate has at least one quality rule.
+
+## The snapshot hash
+
+```bash title="Terminal"
+modelstill spec hash tasks/<task>/spec.yaml
+```
+
+SHA-256 of the parsed spec plus the text of the instruction and output-schema files. Editing the prompt changes the hash even if the YAML did not change. `modelstill push task` registers the spec with this hash and the git commit, and training artifacts carry it in their path.

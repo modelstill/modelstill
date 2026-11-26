@@ -1,0 +1,321 @@
+---
+title: Quickstart
+description: See a release gate pass and fail in three commands, then define your own task, record evals with intervals and push them to your self-hosted dashboard.
+icon: Rocket
+---
+
+## See the gate in one minute
+
+Three commands, no API key and no network after the install. You need [uv](https://docs.astral.sh/uv/); it fetches Python 3.12 if you do not have it.
+
+```bash title="Terminal"
+uv tool install "git+https://github.com/modelstill/modelstill#subdirectory=python/modelstill"
+modelstill quickstart demo
+modelstill report gate demo/history.jsonl 2d1857f9 \
+    --spec demo/tasks/ticket-priority-example/spec.yaml \
+    --previous 248036ea \
+    --flip-rate 0.004 --cost-ratio 0.82 --p95-latency-ms 640
+```
+
+Once ModelStill is on PyPI the first line becomes `uv tool install modelstill`.
+
+`modelstill quickstart demo` writes a ticket-triage task with 240 generated example tickets, and a run history with three recorded runs of it: the accepted baseline `prompt-v1`, `prompt-v2` (clearer billing rules, cheaper) and `prompt-v3` (much cheaper, but it lost the rule that data at risk is urgent). It is example data, not real tickets or real model answers. The run ids are the same on every machine, and the command prints the next steps:
+
+```text title="Output"
+Wrote an example project to demo (example data: generated tickets and recorded
+model answers, no API key or network needed).
+
+  demo/tasks/ticket-priority-example/  task spec, prompt and 240 example tickets
+  demo/history.jsonl                   three recorded runs, baseline accepted
+
+  248036ea  prompt-v1  accuracy 0.933 [0.894, 0.961]  the accepted baseline
+  2d1857f9  prompt-v2  accuracy 0.958 [0.925, 0.980]  clearer billing rules and a shorter prompt
+  48c5a1b6  prompt-v3  accuracy 0.883 [0.836, 0.921]  a cheaper prompt that dropped the data-at-risk rule
+
+Flip rate, cost ratio and p95 latency are measured outside ModelStill; the example's
+recorded values are in the commands below.
+
+Gate prompt-v2 against the baseline (passes, exit code 0):
+
+modelstill report gate demo/history.jsonl 2d1857f9 \
+    --spec demo/tasks/ticket-priority-example/spec.yaml \
+    --previous 248036ea \
+    --flip-rate 0.004 --cost-ratio 0.82 --p95-latency-ms 640
+
+Gate prompt-v3 against the baseline (fails, exit code 2):
+
+modelstill report gate demo/history.jsonl 48c5a1b6 \
+    --spec demo/tasks/ticket-priority-example/spec.yaml \
+    --previous 248036ea \
+    --flip-rate 0.004 --cost-ratio 0.55 --p95-latency-ms 590
+```
+
+The gate for `prompt-v2` passes and exits 0. The paired difference against the baseline is +0.025 and its lower bound, 0.000, is above the allowed regression of -0.020:
+
+```markdown title="Output"
+<!-- modelstill-gate -->
+### ModelStill gate: passed
+
+Run `2d1857f9` (prompt-v2) on `golden@493c3e2b`, compared with `248036ea` (prompt-v1).
+per-case mean 0.958 [0.925, 0.980], 240 cases.
+
+| Check | Threshold | Measured | Interval | Result |
+|---|---|---|---|---|
+| regression_vs_baseline | >= -0.020 | 0.000 | [+0.000, +0.050] | pass |
+| flip_rate | <= 0.010 | 0.004 | not sampled | pass |
+| cost_ratio | <= 1.000 | 0.820 | not sampled | pass |
+| p95_latency_ms | <= 2000 | 640 | not sampled | pass |
+
+#### Paired comparison
+
+Difference +0.025 [+0.000, +0.050] (no detectable difference) over 240 cases: 8 fixed, 2 broken.
+
+| Case | Before | After |
+|---|---|---|
+| ticket-011 | 1.000 | 0.000 |
+| ticket-023 | 1.000 | 0.000 |
+```
+
+Now the second command it printed:
+
+```bash title="Terminal"
+modelstill report gate demo/history.jsonl 48c5a1b6 \
+    --spec demo/tasks/ticket-priority-example/spec.yaml \
+    --previous 248036ea \
+    --flip-rate 0.004 --cost-ratio 0.55 --p95-latency-ms 590
+```
+
+`prompt-v3` scores 0.883 against the baseline's 0.933. It fixed 8 tickets but broke 20, every one a customer seeing another customer's records. The lower bound of the paired difference, -0.092, is below -0.020, so the gate fails and exits 2, which fails a CI job:
+
+```markdown title="Output"
+<!-- modelstill-gate -->
+### ModelStill gate: failed
+
+Run `48c5a1b6` (prompt-v3) on `golden@493c3e2b`, compared with `248036ea` (prompt-v1).
+per-case mean 0.883 [0.836, 0.921], 240 cases.
+
+| Check | Threshold | Measured | Interval | Result |
+|---|---|---|---|---|
+| regression_vs_baseline | >= -0.020 | -0.092 | [-0.092, -0.008] | **fail** |
+| flip_rate | <= 0.010 | 0.004 | not sampled | pass |
+| cost_ratio | <= 1.000 | 0.550 | not sampled | pass |
+| p95_latency_ms | <= 2000 | 590 | not sampled | pass |
+
+#### Paired comparison
+
+Difference -0.050 [-0.092, -0.008] (worse) over 240 cases: 8 fixed, 20 broken.
+
+| Case | Before | After |
+|---|---|---|
+| ticket-003 | 1.000 | 0.000 |
+| ticket-015 | 1.000 | 0.000 |
+| ticket-027 | 1.000 | 0.000 |
+| ticket-039 | 1.000 | 0.000 |
+| ticket-051 | 1.000 | 0.000 |
+```
+
+Flip rate, cost ratio and p95 latency are measured outside ModelStill and passed in, which is why they show "not sampled". The thresholds live in `demo/tasks/ticket-priority-example/spec.yaml`. `modelstill quickstart` refuses to write into a directory that is not empty.
+
+## Set up your own task
+
+This part takes you from nothing to one task with two scored runs, a gate decision and the same data in the dashboard. It needs Python 3.12, [uv](https://docs.astral.sh/uv/), [Bun](https://bun.sh) and Docker. No GPU and no model provider key.
+
+<Steps>
+
+<Step>
+
+### Install
+
+ModelStill is not on PyPI yet. Clone the repository and install the CLI from it.
+
+```bash title="Terminal"
+git clone https://github.com/modelstill/modelstill.git
+uv tool install ./modelstill/python/modelstill
+modelstill --help
+```
+
+`uv tool install` puts `modelstill` on your PATH. To use the library from Python as well, add it to your project instead: `uv add ./modelstill/python/modelstill`. The rest of this page runs from the root of your own project.
+
+The core package needs only pydantic, PyYAML and SciPy. Training, Modal, LiteLLM and pytest support are optional extras (`train`, `modal`, `litellm`, `pytest`).
+
+</Step>
+
+<Step>
+
+### Define a task
+
+A task is a folder with a spec, the system prompt and the output schema. This example classifies support tickets.
+
+```text title="Layout"
+tasks/ticket-priority/
+  spec.yaml
+  prompts/system.md
+  schemas/out.json
+  data/golden.jsonl
+```
+
+```yaml title="tasks/ticket-priority/spec.yaml"
+task: ticket-priority
+version: 1
+instruction: prompts/system.md
+output_schema: schemas/out.json
+requirements:
+  - id: correct_priority
+    priority: p0
+    type: label
+    instruction: The priority is low, normal or urgent, as the ticket text supports it.
+labelling:
+  teachers:
+    - {model: openai/gpt-5-mini, family: openai}
+    - {model: anthropic/claude-haiku-4-5, family: anthropic}
+  disagreement: human_queue
+eval:
+  judge: {model: google/gemini-2.5-flash, family: google}
+  golden_set: data/golden.jsonl
+  gate:
+    metric: correct_priority
+    max_regression: 0.02
+    max_flip_rate: 0.01
+    max_cost_ratio: 0.6
+    max_p95_latency_ms: 2000
+train:
+  base: Qwen/Qwen3-1.7B
+  method: lora
+  lora_r: 16
+  seeds: [1, 2, 3]
+serve:
+  litellm_alias: ticket-priority
+  fallback: ticket-priority-cloud
+  target_error: 0.05
+monitor:
+  canary: data/canary.jsonl
+  replay_frac: 0.3
+```
+
+The model names are placeholders: pick your own. The judge must come from a family no teacher uses, or validation fails. Check it:
+
+```bash title="Terminal"
+modelstill spec validate tasks/ticket-priority/spec.yaml
+modelstill spec hash tasks/ticket-priority/spec.yaml
+```
+
+`spec hash` prints the snapshot hash of the spec and the files it names. Every run and gate is tied to it. See the [task spec reference](/reference/task-spec).
+
+</Step>
+
+<Step>
+
+### Write a few cases
+
+A benchmark is JSONL with an `id`, an `input`, an `expected` answer and optional `tags`.
+
+```json title="tasks/ticket-priority/data/golden.jsonl"
+{"id": "t1", "input": "The checkout page returns 500 for every customer.", "expected": "urgent"}
+{"id": "t2", "input": "Can you change the email on my invoice?", "expected": "normal"}
+{"id": "t3", "input": "Small typo on the pricing page.", "expected": "low"}
+```
+
+</Step>
+
+<Step>
+
+### Record a first eval
+
+Score any callable on the cases and append the run to a history file. Here a stand-in function plays the model; in your code it calls your LLM.
+
+```python title="record_eval.py"
+from pathlib import Path
+
+from modelstill.benchmark import History, load_benchmark
+from modelstill.evals import exact_match, run
+
+
+def classify(ticket: str) -> str:
+    return "urgent" if "500" in ticket else "normal"
+
+
+benchmark = load_benchmark(Path("tasks/ticket-priority/data/golden.jsonl"))
+result = run(benchmark.cases, classify, exact_match)
+run_id = History(Path("history.jsonl")).record(benchmark, "rules-v1", result)
+print(f"{run_id} {result.mean:.3f} [{result.low:.3f}, {result.high:.3f}]")
+```
+
+```bash title="Terminal"
+uv run python record_eval.py
+modelstill eval runs history.jsonl
+```
+
+Each run prints its mean with a 95% interval. With a handful of pass/fail cases the interval is wide, and that is the point: it tells you how little a small set proves.
+
+</Step>
+
+<Step>
+
+### Compare, accept and gate
+
+Record a second run (change the model or the prompt), then compare the two case by case and gate the new one against the accepted baseline. Run ids can be given as a unique prefix.
+
+```bash title="Terminal"
+modelstill eval compare history.jsonl <before> <after>
+modelstill eval accept history.jsonl <before>
+modelstill report gate history.jsonl <after> --spec tasks/ticket-priority/spec.yaml \
+  --previous <before> --flip-rate 1 --cost-ratio 9 --p95-latency-ms 99999 --format markdown
+```
+
+Flip rate, cost ratio and latency are measured outside ModelStill. Until you measure them, pass the failing worst-case values shown above: the gate then fails honestly instead of passing on numbers nobody measured. `report gate` exits 0 on a pass, 2 on a fail and 1 on an error.
+
+</Step>
+
+<Step>
+
+### Push it to the dashboard
+
+Start the local stack: Postgres and ClickHouse from Docker Compose, then the API and the dashboard.
+
+```bash title="Terminal"
+cd modelstill
+docker compose up -d
+bun install
+```
+
+```bash title="Terminal 1"
+cd modelstill/apps/api
+MODELSTILL_API_TOKEN=$(openssl rand -hex 16) bun run dev
+```
+
+```bash title="Terminal 2"
+cd modelstill/apps/website
+bun run dev
+```
+
+Sign in at `http://localhost:4323` with an emailed code (locally the code is printed in the API log), create a **Read and write** key under **Settings > API keys**, then push:
+
+```bash title="Terminal"
+export MODELSTILL_API_URL=http://localhost:8787
+export MODELSTILL_API_TOKEN=ms_live_your_key_here
+modelstill push task tasks/ticket-priority/spec.yaml
+modelstill push run history.jsonl <before> --task ticket-priority
+modelstill push run history.jsonl <after> --task ticket-priority
+modelstill push gate history.jsonl <after> --task ticket-priority \
+  --spec tasks/ticket-priority/spec.yaml --previous <before> \
+  --flip-rate 1 --cost-ratio 9 --p95-latency-ms 99999
+```
+
+The push commands read the credential from `MODELSTILL_API_TOKEN`: either the API's admin token or a write API key. With the worst-case values above the gate fails, so `push gate` records the failed decision and exits 2. Open **Tasks > ticket-priority** to see the runs, the comparison and the gate report.
+
+</Step>
+
+</Steps>
+
+<Callout type="warn">
+Without `DATABASE_URL` the API keeps everything in memory, including users and keys, and loses it on restart. See [Authentication](/authentication) for a Postgres-backed setup.
+</Callout>
+
+## Next steps
+
+<Cards>
+  <Card title="Write a scorer" href="/guides/write-a-scorer" description="Exact match, set F1, JSON equality and an LLM judge checked against people." />
+  <Card title="Import traces" href="/guides/import-traces" description="Build a dataset from the calls you already log." />
+  <Card title="Gate in CI" href="/guides/ci-gate" description="Run the same gate on every pull request." />
+  <Card title="Distil a task" href="/guides/distil-a-task" description="Train and serve a small student." />
+</Cards>

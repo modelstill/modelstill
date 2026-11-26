@@ -1,0 +1,44 @@
+---
+title: GitHub Action
+description: The modelstill-gate composite action posts the release gate on a pull request and fails the job when the gate fails.
+icon: GitPullRequest
+---
+
+The action lives at `.github/actions/modelstill-gate` in the ModelStill repository. Use it by path and a full commit SHA:
+
+```yaml title=".github/workflows/modelstill-gate.yml"
+- uses: <owner>/modelstill/.github/actions/modelstill-gate@<commit-sha>
+  with:
+    spec: tasks/<task>/spec.yaml
+    history: evals/history.jsonl
+    run: ${{ steps.candidate.outputs.run }}
+    baseline: ${{ vars.MODELSTILL_BASELINE_RUN }}
+    flip-rate: ${{ steps.candidate.outputs.flip_rate }}
+    cost-ratio: ${{ steps.candidate.outputs.cost_ratio }}
+    p95-latency-ms: ${{ steps.candidate.outputs.p95_latency_ms }}
+```
+
+## Inputs
+
+| Input | Default | Meaning |
+|---|---|---|
+| `spec` | | the task spec |
+| `history` | | the run history file |
+| `run` | | the candidate run id |
+| `baseline` | | the accepted baseline run id |
+| `flip-rate`, `cost-ratio`, `p95-latency-ms` | | measured values; pass failing worst cases when not measured |
+| `primary-metric` | | a named metric to gate on |
+| `python-version` | `3.12` | |
+| `package` | `modelstill==0.1.0` | until a release is on PyPI, a pinned git URL such as `modelstill @ git+https://...@<sha>#subdirectory=python/modelstill` |
+| `working-directory` | the workspace | |
+| `github-token` | `github.token` | used to post the comment |
+
+## What it does
+
+1. Sets up uv, pinned by commit.
+2. Installs `package` into a virtualenv under `$RUNNER_TEMP`.
+3. Runs `modelstill report gate` and copies the Markdown report into the job summary.
+4. On `pull_request` events, posts the report as a comment or edits the earlier one, found by its hidden first line `<!-- modelstill-gate -->`.
+5. Fails the job when the gate failed, after the comment is posted.
+
+The job needs `pull-requests: write` and `contents: read`. See [Regression-test prompt and model changes in CI](/guides/ci-gate) for the full workflow.

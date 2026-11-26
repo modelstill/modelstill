@@ -1,0 +1,164 @@
+[
+  {
+    "id": "log-1",
+    "_xact_id": "1000192656880881099",
+    "created": "2026-11-20T10:00:00.000Z",
+    "org_id": "org-1",
+    "project_id": "proj-1",
+    "log_id": "g",
+    "span_id": "span-1",
+    "root_span_id": "span-1",
+    "span_parents": null,
+    "is_root": true,
+    "span_attributes": {
+      "name": "Chat Completion",
+      "type": "llm"
+    },
+    "input": [
+      {
+        "role": "system",
+        "content": "List the tools named in the text."
+      },
+      {
+        "role": "user",
+        "content": "We use Python and dbt."
+      }
+    ],
+    "output": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "python, dbt"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "metadata": {
+      "model": "gpt-5-mini",
+      "temperature": 0
+    },
+    "metrics": {
+      "start": 1763632800.0,
+      "end": 1763632800.82,
+      "prompt_tokens": 30,
+      "completion_tokens": 4,
+      "tokens": 34
+    },
+    "scores": null,
+    "error": null,
+    "tags": null
+  },
+  {
+    "id": "log-2",
+    "_xact_id": "1000192656880881100",
+    "created": "2026-11-20T10:01:00.000Z",
+    "org_id": "org-1",
+    "project_id": "proj-1",
+    "log_id": "g",
+    "span_id": "span-2",
+    "root_span_id": "span-2",
+    "span_parents": null,
+    "is_root": true,
+    "span_attributes": {
+      "name": "technographics",
+      "type": "task"
+    },
+    "input": {
+      "text": "Our stack is Kubernetes."
+    },
+    "output": {
+      "technologies": [
+        "kubernetes"
+      ]
+    },
+    "metadata": {},
+    "metrics": {
+      "start": 1763632860.0,
+      "end": 1763632861.2
+    },
+    "scores": {
+      "Factuality": 1
+    },
+    "error": null
+  },
+  {
+    "id": "log-3",
+    "_xact_id": "1000192656880881101",
+    "created": "2026-11-20T10:01:00.500Z",
+    "org_id": "org-1",
+    "project_id": "proj-1",
+    "log_id": "g",
+    "span_id": "span-3",
+    "root_span_id": "span-2",
+    "span_parents": [
+      "span-2"
+    ],
+    "is_root": false,
+    "span_attributes": {
+      "name": "Chat Completion",
+      "type": "llm"
+    },
+    "input": [
+      {
+        "role": "system",
+        "content": "List the tools named in the text."
+      },
+      {
+        "role": "user",
+        "content": "Our stack is Kubernetes."
+      }
+    ],
+    "output": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "kubernetes"
+        }
+      }
+    ],
+    "metadata": {
+      "model": "claude-haiku-4-5"
+    },
+    "metrics": {
+      "start": 1763632860.1,
+      "end": 1763632861.1
+    }
+  },
+  {
+    "id": "log-4",
+    "_xact_id": "1000192656880881102",
+    "created": "2026-11-20T10:02:00.000Z",
+    "org_id": "org-1",
+    "project_id": "proj-1",
+    "log_id": "g",
+    "span_id": "span-4",
+    "root_span_id": "span-4",
+    "span_parents": null,
+    "is_root": true,
+    "span_attributes": {
+      "name": "Chat Completion",
+      "type": "llm"
+    },
+    "input": [
+      {
+        "role": "system",
+        "content": "List the tools named in the text."
+      },
+      {
+        "role": "user",
+        "content": "We run Excel macros."
+      }
+    ],
+    "output": null,
+    "error": "RateLimitError: 429 Too Many Requests",
+    "metadata": {
+      "model": "gpt-5-mini"
+    },
+    "metrics": {
+      "start": 1763632920.0,
+      "end": 1763632920.3
+    }
+  }
+]

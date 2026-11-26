@@ -1,0 +1,63 @@
+---
+title: FAQ
+description: Short answers to common questions about ModelStill - hosting, intervals, judges, the gate, training and serving.
+icon: Question
+---
+
+<Accordions>
+
+<Accordion title="Is there a hosted ModelStill?">
+No. ModelStill is self-hosted today: you run the API, the dashboard and the MCP server yourself. Locally they listen on `http://localhost:8787`, `http://localhost:4323` and `http://localhost:3104/mcp`. Deployment manifests for Kubernetes exist in the repository, but nothing is deployed publicly.
+</Accordion>
+
+<Accordion title="Can I install it from PyPI?">
+Not yet. Install from the repository: `uv tool install ./modelstill/python/modelstill` for the CLI, or `uv add` the same path in your project. The GitHub Action takes a pinned git URL in its `package` input until a release is published.
+</Accordion>
+
+<Accordion title="Do I need a GPU?">
+Not for evals, comparisons, gates, swaps, ingest, import or monitoring. The core package needs only pydantic, PyYAML and SciPy. Training and serving a student need a GPU: on an SSH host or on Modal, never on a laptop.
+</Accordion>
+
+<Accordion title="Why does every score have an interval?">
+Because test sets are small. A mean over 300 cases can move by several points between two equally good models. ModelStill reports exact Clopper-Pearson intervals for pass/fail scores and a seeded bootstrap otherwise, and the gate reads the lower bound, so a lucky mean cannot pass.
+</Accordion>
+
+<Accordion title="Why can't the judge share a family with a teacher?">
+A judge tends to prefer answers from its own family. If the judge is related to the model that labelled the training data, the student is graded by its teacher's taste. `modelstill spec validate` refuses such a spec.
+</Accordion>
+
+<Accordion title="Can ModelStill evaluate agents, tool calling, RAG or prompt injection?">
+Partly. ModelStill scores any task whose final output you can score per case: exact match, set F1, JSON equality, your own function or an LLM judge. That covers an agent's final answer, a tool call's arguments compared as JSON, or the document ids a retriever returns scored with set F1 against the expected ids. A set of prompt-injection inputs with a scorer that checks the output works the same way.
+
+It does not have built-in support for multi-step agent trajectories, tool-call traces, retrieval metrics such as recall at k, or a library of attacks. You write the cases and the scorer; ModelStill adds the intervals, the paired comparison and the gate. See [Write a scorer](/guides/write-a-scorer).
+</Accordion>
+
+<Accordion title="My gate fails on flip rate, cost ratio and latency. Why?">
+Those are measured outside ModelStill and passed in. If you passed the worst-case values (`--flip-rate 1 --cost-ratio 9 --p95-latency-ms 99999`) because you did not measure them, the gate is right to fail. Measure them, or name why with `--not-measured CHECK=REASON` so the dashboard shows the check as not measured.
+</Accordion>
+
+<Accordion title="Can I decide a model swap without a gold set?">
+Yes: `modelstill swap` replays recorded calls and compares each candidate's agreement with today's model against today's model's agreement with itself. It answers "does it behave the same", not "is it right". See [Check a model swap](/guides/model-swap).
+</Accordion>
+
+<Accordion title="Does the student ever answer when it is unsure?">
+No. In `serve` mode the student answers only when it is the deployed model and its confidence reaches the calibrated threshold. Otherwise the cloud model answers and both answers are logged.
+</Accordion>
+
+<Accordion title="How do I roll back?">
+Set the mode to `off`: with the MCP tool `set_deployment_mode` or `PUT /v1/tasks/{slug}/deployment` when the plugin follows the API, or `mode: off` in the deployment file when it does not (or while the API is down). The plugin re-reads it within 30 seconds and every call goes back to the cloud model.
+</Accordion>
+
+<Accordion title="Can I change the serving mode from the dashboard?">
+Yes. On the **Deployment** page pick `off`, `shadow` or `serve` in the **Serving mode** card; `serve` asks you to confirm first. The dashboard writes the change with `PUT /v1/tasks/{slug}/deployment`. When the LiteLLM plugin config has an `api` block it polls that record, so the change (from the dashboard, `set_deployment_mode`, or the `PUT`) reaches the running proxy within its reload interval, with no file edit. Without the `api` block the plugin serves its deployment file and the record only documents it. See [Deployment](/dashboard/deployment) and [Serving modes](/concepts/serving-modes) for the precedence rule.
+</Accordion>
+
+<Accordion title="Are request bodies stored?">
+No. The serving events keep a request hash and both answers, not the request body. Adding a request to a dataset writes a case you fill in.
+</Accordion>
+
+<Accordion title="Where do I report a problem with the docs?">
+Open an issue in the ModelStill repository. These pages live in `apps/docs/content/docs`.
+</Accordion>
+
+</Accordions>

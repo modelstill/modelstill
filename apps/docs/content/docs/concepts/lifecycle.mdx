@@ -1,0 +1,41 @@
+---
+title: The task lifecycle
+description: The pieces of ModelStill and the order a task moves through them, from a spec to a monitored student.
+icon: Path
+---
+
+ModelStill works on one narrow task at a time: a single kind of call your application sends to a cloud model, such as "classify this ticket" or "extract the technologies named in a job posting". Wide, open-ended chat is out of scope.
+
+## The order
+
+| Step | What happens | Where |
+|---|---|---|
+| Spec | Describe the task: instruction, output schema, requirements, teachers, judge, gate, training, serving, monitoring. | `tasks/<task>/spec.yaml`, `modelstill spec` |
+| Record | Read the calls you already log into a dataset. | `modelstill ingest`, the LiteLLM plugin in mode `off` |
+| Label | Two teacher models answer; disagreements go to a person. | review queue, `modelstill push review` |
+| Score | Score models on a benchmark. Every score carries a 95% interval. | `modelstill.evals`, `modelstill import`, the pytest plugin |
+| Compare | Pair two runs case by case: difference with an interval, fixed and broken cases. | `modelstill eval compare`, the dashboard Compare page |
+| Gate | Check a candidate against the accepted baseline and the spec's limits. | `modelstill report gate`, `modelstill push gate` |
+| Train | Train a small student on recorded answers, with several seeds. | `modelstill train run` |
+| Serve | Put the student behind the task's LiteLLM name. Roll out off, shadow, serve. | the LiteLLM plugin, `modelstill serve calibrate` |
+| Watch | Canaries, drift hashes and a log-prob watchdog. | `modelstill monitor`, `modelstill watch` |
+
+You can stop at any step. Many teams only use the eval, compare and gate steps to check prompt and model changes.
+
+## The pieces
+
+- **The library** (`python/modelstill`): specs, evals, statistics, gates, ingest and import, training, the LiteLLM plugin, monitoring and the `modelstill` CLI. The core install needs no GPU, cloud account or database.
+- **The API** (`apps/api`): stores tasks, runs, gates, review items, case datasets, deployments and training runs, and serves the [OpenAPI document](/api-reference).
+- **The dashboard** (`apps/website`): reads the API. See [Dashboard](/dashboard/tasks).
+- **The MCP server** (`apps/mcp`): lets coding agents read and act on the same data. See [MCP server](/ai-agents/mcp).
+
+Files stay the source of truth for most work: specs, benchmarks and run history are plain files in your repository. The API is where you share them and look at them together.
+
+## Rules the whole system keeps
+
+- Every reported score carries an interval. Small sets use exact intervals, never the normal approximation.
+- The judge never shares a model family with a teacher. `modelstill spec validate` refuses a spec that breaks this.
+- A gate decision is stored with every threshold and measured value, so it can be re-read later.
+- A check that was not measured is recorded at a failing value, never as passing.
+- Every model artifact lives at an immutable, versioned path. Nothing is overwritten in place.
+- The gateway checks which model actually answered and defers to the cloud model on a mismatch.

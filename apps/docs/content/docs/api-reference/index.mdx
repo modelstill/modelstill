@@ -1,0 +1,62 @@
+---
+title: API overview
+description: The ModelStill REST API - base URL, authentication, errors, ids and where the OpenAPI document lives.
+icon: Code
+---
+
+import { ListChecks, Flask, ShieldCheck, UserCheck, Table, ChartLineUp, CloudArrowUp, Pulse, GraduationCap, Key } from "@phosphor-icons/react/ssr";
+
+The API stores tasks, eval runs, gates, review items, case datasets, deployments and training runs. The dashboard, the `modelstill push` commands and the MCP server all use it. The pages in this section are generated from the API's own OpenAPI document.
+
+## Base URL
+
+The API is self-hosted. Locally it runs on:
+
+```text
+http://localhost:8787
+```
+
+Every route is under `/v1`. `GET /health` answers `{"ok": true}` without a credential. The OpenAPI document is at `/openapi.json` and an interactive reference at `/docs/reference` on the API itself.
+
+## Authentication
+
+Send an API key as `Authorization: Bearer ms_live_...` or `x-api-key: ms_live_...`. A read key can call every `GET` route; writes need a write key, the admin token or a signed-in session. See [Authentication](/authentication).
+
+```bash title="Terminal"
+curl http://localhost:8787/v1/tasks -H "Authorization: Bearer $MODELSTILL_API_KEY"
+```
+
+## Errors
+
+| Status | Body | When |
+|---|---|---|
+| `400` | `{"error": "invalid_request", "issues": [{"message", "path"}]}` | the request does not match the schema |
+| `400` | `{"error": "different_cases"}` | compared runs share no cases in the same order |
+| `401` | `{"error": "unauthorized"}` | no valid credential |
+| `403` | `{"error": "forbidden"}` | the credential lacks the permission or OAuth scope |
+| `404` | `{"error": "not_found"}` | no such task, run, item or key |
+| `409` | `{"error": "conflict"}` | a training-run key already belongs to another task |
+| `409` | `{"error": "dataset_exists"}` or `{"error": "version_conflict"}` | a dataset name is taken, or a dataset write was made against an old version |
+
+## Writes are safe to retry
+
+- Eval runs and gates carry a client-chosen UUID `id`. Sending the same one again returns the stored record with `200` instead of `201`.
+- Review items are upserted by input hash; a human decision is never overwritten.
+- Training metrics are stored by run, step and name; sending a point again replaces it.
+
+Run and gate ids are accepted with or without dashes.
+
+## Endpoints
+
+<Cards>
+  <Card icon={<ListChecks />} title="Tasks" href="/api-reference/tasks" description="List, read and register tasks and versions." />
+  <Card icon={<Flask />} title="Eval runs" href="/api-reference/eval-runs" description="Push runs, read cases and histograms, compare two runs." />
+  <Card icon={<ShieldCheck />} title="Gates" href="/api-reference/gates" description="Record and read gate decisions." />
+  <Card icon={<UserCheck />} title="Review" href="/api-reference/review" description="Queue and decide review items." />
+  <Card icon={<Table />} title="Case datasets" href="/api-reference/datasets" description="Versioned benchmark cases." />
+  <Card icon={<ChartLineUp />} title="Requests" href="/api-reference/requests" description="Individual serving requests." />
+  <Card icon={<CloudArrowUp />} title="Deployment and traffic" href="/api-reference/deployment" description="Routing record and hourly traffic." />
+  <Card icon={<Pulse />} title="Canaries and alerts" href="/api-reference/monitoring" description="Monitoring records." />
+  <Card icon={<GraduationCap />} title="Training runs" href="/api-reference/training" description="Runs and metric series." />
+  <Card icon={<Key />} title="Account" href="/api-reference/account" description="API keys and onboarding." />
+</Cards>

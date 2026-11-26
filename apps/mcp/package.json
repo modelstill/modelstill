@@ -1,0 +1,26 @@
+{
+  "name": "@modelstill/mcp",
+  "license": "Apache-2.0",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "build": "bun build src/index.ts --target bun --outdir dist",
+    "start": "bun run dist/index.js",
+    "test": "bun test --timeout 15000",
+    "typecheck": "tsc --noEmit --incremental false",
+    "lint": "oxlint .",
+    "cleanup": "rimraf node_modules .turbo dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.0",
+    "hono": "4.13.16",
+    "zod": "3.25.32"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "1.0.7",
+    "@types/bun": "1.2.8",
+    "typescript": "5.8.2"
+  }
+}

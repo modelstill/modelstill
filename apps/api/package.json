@@ -1,0 +1,34 @@
+{
+  "name": "@modelstill/api",
+  "license": "Apache-2.0",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "test": "bun test --timeout 15000",
+    "test:integration": "bun test --timeout 30000 ./test/store-postgres.integration.ts ./test/auth-postgres.integration.ts ./test/datasets-postgres.integration.ts",
+    "seed:demo": "bun run scripts/seed-demo.ts",
+    "typecheck": "tsc --noEmit --incremental false",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "cleanup": "rimraf node_modules .turbo dist"
+  },
+  "dependencies": {
+    "@better-auth/api-key": "1.6.19",
+    "@better-auth/core": "1.6.19",
+    "@hono/zod-openapi": "0.19.2",
+    "@scalar/hono-api-reference": "0.7.5",
+    "better-auth": "1.6.19",
+    "drizzle-orm": "0.41.0",
+    "hono": "4.13.16",
+    "postgres": "3.4.5",
+    "zod": "3.25.32"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "1.0.7",
+    "@types/bun": "1.2.8",
+    "drizzle-kit": "0.30.6",
+    "typescript": "5.8.2"
+  }
+}

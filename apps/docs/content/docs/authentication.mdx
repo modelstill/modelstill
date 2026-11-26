@@ -1,0 +1,125 @@
+---
+title: Authentication
+description: How people, scripts, CI and MCP clients sign in to the ModelStill API - email codes, ms_live_ API keys, the admin token and MCP OAuth.
+icon: Key
+---
+
+The API accepts four kinds of credential. It checks them in this order on every `/v1/*` request.
+
+| Credential | How you send it | Can do |
+|---|---|---|
+| Admin token (`MODELSTILL_API_TOKEN` on the API) | `Authorization: Bearer <token>` | everything |
+| API key, starts with `ms_live_` | `Authorization: Bearer ms_live_...` or `x-api-key: ms_live_...` | reads, and writes if the key has write permission |
+| MCP OAuth access token | `Authorization: Bearer <token>` | what its scopes allow (`modelstill:read`, `modelstill:write`) |
+| Dashboard session cookie | sent by the browser | everything, as the signed-in user |
+
+A request without a valid credential gets `401` with `{"error": "unauthorized"}`. A credential without the needed permission gets `403` with `{"error": "forbidden"}`.
+
+## Sign in to the dashboard
+
+There are no passwords. You sign in with a one-time code sent to your email.
+
+1. Open `http://localhost:4323`. Every page sends you to `/login`.
+2. Enter your email and press **Send sign-in code**.
+3. Enter the 6-digit code. The first sign-in creates the user.
+
+<Callout type="warn">
+The self-hosted API does not send email yet. It prints the code in its log: `[auth] sign-in code for you@example.com: 123456`.
+</Callout>
+
+To limit who can sign in, set `MODELSTILL_ALLOWED_EMAILS` on the API to a comma list of addresses and `@domain` entries. A code request from anyone else answers `403 EMAIL_NOT_ALLOWED`.
+
+## Create an API key
+
+<Steps>
+
+<Step>
+
+### In the dashboard
+
+Open **Settings > API keys** and press **Create API key**. Give it a name and choose **Read only** or **Read and write**. Copy the key on the last step: it is shown once and stored hashed.
+
+</Step>
+
+<Step>
+
+### Check it
+
+```bash title="Terminal"
+export MODELSTILL_API_KEY=ms_live_your_key_here
+curl http://localhost:8787/v1/tasks -H "Authorization: Bearer $MODELSTILL_API_KEY"
+```
+
+</Step>
+
+</Steps>
+
+A read key can call every `GET` route. A write key can also push tasks, runs, gates, review items and training runs, decide review items and change deployments. Only a signed-in dashboard session can create keys (`POST /v1/api-keys`).
+
+### Without the dashboard
+
+The same flow by hand, against a local API:
+
+```bash title="Terminal"
+API=http://localhost:8787; ORIGIN=http://localhost:4323
+curl -s -X POST $API/api/auth/email-otp/send-verification-otp -H "origin: $ORIGIN" \
+  -H 'content-type: application/json' -d '{"email":"you@example.com","type":"sign-in"}'
+curl -s -c jar.txt -X POST $API/api/auth/sign-in/email-otp -H "origin: $ORIGIN" \
+  -H 'content-type: application/json' -d '{"email":"you@example.com","otp":"<code from the API log>"}'
+curl -s -b jar.txt -X POST $API/v1/api-keys -H "origin: $ORIGIN" \
+  -H 'content-type: application/json' -d '{"name":"laptop","permission":"write"}'
+rm jar.txt
+```
+
+### Revoke a key
+
+Press **Revoke** next to the key in **Settings > API keys**, or call `POST /api/auth/api-key/delete` with `{"keyId": "..."}` and a session cookie.
+
+## Use a key from the CLI
+
+The `modelstill push` commands read the API URL and credential from the environment:
+
+```bash title="Terminal"
+export MODELSTILL_API_URL=http://localhost:8787
+export MODELSTILL_API_TOKEN=ms_live_your_key_here
+modelstill push task tasks/<task>/spec.yaml
+```
+
+`MODELSTILL_API_TOKEN` may hold the admin token or a write API key. `--api` overrides the URL.
+
+## MCP OAuth
+
+MCP clients such as Claude Code can sign in with OAuth instead of a key. The API is the authorization server:
+
+- Discovery: `/.well-known/oauth-authorization-server` (also served as `/.well-known/openid-configuration`) and `/.well-known/oauth-protected-resource`.
+- Endpoints under `/api/auth/mcp/`: `register` (dynamic client registration), `authorize`, `token`, `userinfo`, `jwks`.
+- PKCE with S256 is required.
+- Scopes: `openid profile email offline_access modelstill:read modelstill:write`.
+
+When a client connects without credentials, the MCP server answers `401` with a `WWW-Authenticate` header that points at the protected-resource metadata. The client then opens the dashboard sign-in and the consent page (`/oauth/consent`), where you allow or deny the scopes. See [MCP server](/ai-agents/mcp).
+
+## API environment
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `DATABASE_URL` | unset: users, sessions and keys live in memory | Postgres for the store and the auth tables |
+| `MODELSTILL_API_TOKEN` | unset | the admin and automation token |
+| `BETTER_AUTH_SECRET` | a development secret | signs cookies and encrypts the JWT key set; set a random 32+ character value |
+| `BETTER_AUTH_URL` | `http://localhost:$PORT` | the API's public origin, the OAuth issuer |
+| `FRONTEND_URL` | `http://localhost:4323` | the dashboard, where `/login` and `/oauth/consent` live |
+| `CORS_ORIGINS` | the dashboard origin and `http://localhost:3000` | origins allowed to call with cookies |
+| `MCP_RESOURCE_URL` | `http://localhost:3104/mcp` | the MCP server, named in the protected-resource metadata |
+| `MODELSTILL_ALLOWED_EMAILS` | anyone | addresses and `@domain` entries allowed to sign in |
+
+With Postgres, run the migrations first:
+
+```bash title="Terminal"
+cd apps/api
+DATABASE_URL=postgres://postgres:postgres@localhost:5434/modelstill bunx drizzle-kit migrate
+```
+
+## Troubleshooting
+
+- **Every request is 401 for a signed-in user** and `get-session` answers 500 `Failed to decrypt private key`: the `auth_jwks` key set was made with another `BETTER_AUTH_SECRET`. Delete the rows in `auth_jwks`; a new key set is made on next use.
+- **The dashboard signs in but pages still go to `/login`:** the cookie does not reach the dashboard. The dashboard and API must share a registrable domain, and the dashboard origin must be in `CORS_ORIGINS`.
+- **A code request answers `403 EMAIL_NOT_ALLOWED`:** the address is not in `MODELSTILL_ALLOWED_EMAILS`.

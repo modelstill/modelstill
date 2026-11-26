@@ -1,0 +1,5 @@
+/blog/*/opengraph-image
+  Content-Type: image/png
+
+/blog/llms.txt
+  Content-Type: text/plain; charset=utf-8

@@ -1,0 +1,6 @@
+/api /api-reference 302
+/api/* /api-reference/:splat 302
+/cli /reference/cli 302
+/spec /reference/task-spec 302
+/mcp /ai-agents/mcp 302
+/skill /ai-agents/skill 302

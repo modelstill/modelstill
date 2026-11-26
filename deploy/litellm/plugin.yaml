@@ -1,0 +1,15 @@
+tasks:
+  technographics:
+    deployment: deployment.technographics.yaml
+    student:
+      base_url: https://student.example.com
+      api_key_env: MODELSTILL_STUDENT_KEY
+      timeout: 30
+    cloud_model: technographics-cloud
+sinks:
+  clickhouse:
+    url: http://clickhouse-modelstill:8123
+    table: modelstill.serving_events
+    user: ms_rw
+    password_env: MODELSTILL_CLICKHOUSE_PASSWORD
+reload_seconds: 30

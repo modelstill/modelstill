@@ -1,0 +1,28 @@
+{
+  "name": "@modelstill/clickhouse-failover",
+  "license": "Apache-2.0",
+  "type": "module",
+  "version": "0.1.0",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "bun test",
+    "cleanup": "rimraf node_modules .turbo dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clickhouse/client": "^1.7.0",
+    "@modelstill/logger": "workspace:*"
+  }
+}

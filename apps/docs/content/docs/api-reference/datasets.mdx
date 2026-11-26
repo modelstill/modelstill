@@ -1,0 +1,20 @@
+---
+title: Case datasets
+description: Versioned case datasets - create, add, edit, delete, read any version, see a row's history and export JSONL.
+icon: Table
+full: true
+_openapi:
+  preload:
+    - ./openapi.json
+---
+
+export default function Layout(props) {
+  const { APIPage, OpenAPIPage } = props.components ?? {};
+  const Comp = OpenAPIPage ?? APIPage;
+  return (
+    <>
+      {props.children}
+      <Comp document="./openapi.json" operations={[{ path: "/v1/tasks/{slug}/datasets", method: "get" }, { path: "/v1/tasks/{slug}/datasets", method: "post" }, { path: "/v1/tasks/{slug}/datasets/{name}", method: "get" }, { path: "/v1/tasks/{slug}/datasets/{name}/versions", method: "get" }, { path: "/v1/tasks/{slug}/datasets/{name}/export", method: "get" }, { path: "/v1/tasks/{slug}/datasets/{name}/rows", method: "post" }, { path: "/v1/tasks/{slug}/datasets/{name}/rows/{rowId}", method: "patch" }, { path: "/v1/tasks/{slug}/datasets/{name}/rows/{rowId}", method: "delete" }, { path: "/v1/tasks/{slug}/datasets/{name}/rows/{rowId}/history", method: "get" }]} />
+    </>
+  );
+}

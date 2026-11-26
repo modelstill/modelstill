@@ -1,0 +1,20 @@
+---
+title: Eval runs
+description: Push eval runs, read them with their histograms and cases, and compare two runs case by case.
+icon: Flask
+full: true
+_openapi:
+  preload:
+    - ./openapi.json
+---
+
+export default function Layout(props) {
+  const { APIPage, OpenAPIPage } = props.components ?? {};
+  const Comp = OpenAPIPage ?? APIPage;
+  return (
+    <>
+      {props.children}
+      <Comp document="./openapi.json" operations={[{ path: "/v1/tasks/{slug}/eval-runs", method: "get" }, { path: "/v1/tasks/{slug}/eval-runs", method: "post" }, { path: "/v1/eval-runs/{id}", method: "get" }, { path: "/v1/eval-runs/{id}/cases", method: "get" }, { path: "/v1/eval-runs/compare", method: "get" }, { path: "/v1/eval-runs/compare/case", method: "get" }]} />
+    </>
+  );
+}

@@ -1,0 +1,20 @@
+---
+title: Review and labelled items
+description: Queue items for human review, decide them, and read the labelled dataset items.
+icon: UserCheck
+full: true
+_openapi:
+  preload:
+    - ./openapi.json
+---
+
+export default function Layout(props) {
+  const { APIPage, OpenAPIPage } = props.components ?? {};
+  const Comp = OpenAPIPage ?? APIPage;
+  return (
+    <>
+      {props.children}
+      <Comp document="./openapi.json" operations={[{ path: "/v1/tasks/{slug}/review-items", method: "post" }, { path: "/v1/tasks/{slug}/review-queue", method: "get" }, { path: "/v1/review-queue/{itemId}/decision", method: "post" }, { path: "/v1/review-queue/decisions", method: "post" }, { path: "/v1/tasks/{slug}/dataset-items", method: "get" }]} />
+    </>
+  );
+}

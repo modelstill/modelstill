@@ -1,0 +1,32 @@
+{
+  "name": "@modelstill/telemetry",
+  "license": "Apache-2.0",
+  "type": "module",
+  "version": "0.1.0",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "bun test",
+    "cleanup": "rimraf node_modules .turbo dist"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/context-async-hooks": "^2.11.0",
+    "@opentelemetry/core": "^2.11.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.222.0",
+    "@opentelemetry/resources": "^2.11.0",
+    "@opentelemetry/sdk-trace-base": "^2.11.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0"
+  }
+}

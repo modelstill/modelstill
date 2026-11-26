@@ -1,0 +1,28 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "env": ["GIT_SHA"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "cleanup": {},
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "passThroughEnv": ["REDIS_HOST", "REDIS_PORT", "REDIS_TEST_URL", "CLICKHOUSE_TEST_URL"]
+    }
+  }
+}

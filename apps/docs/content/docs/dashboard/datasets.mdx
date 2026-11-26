@@ -1,0 +1,69 @@
+---
+title: Datasets
+description: Versioned case datasets you create, import from CSV or JSONL, edit and export as benchmark JSONL, and the labelled items from review.
+icon: Table
+---
+
+The Datasets page has two views: **Cases**, the versioned case datasets, and **Labelled from review**.
+
+## Case datasets
+
+A case dataset is a named set of benchmark cases for one task. Every change makes a new version, and old versions stay readable. Nothing is overwritten.
+
+<Steps>
+
+<Step>
+
+### Create one
+
+Press **New dataset** and give it a name of letters, digits, dots, dashes and underscores. It starts empty at version 1.
+
+</Step>
+
+<Step>
+
+### Add cases
+
+Press **Add a case**, or **Import** a file:
+
+- `.csv` with a header row, or `.jsonl` / `.ndjson` with one object per line;
+- map each column to **Input**, **Expected**, **Metadata**, **Case id** or **Do not import**;
+- for CSV, tick **Read JSON inside cells** to parse JSON values in cells.
+
+The preview lists any row errors. **Import N cases** writes one new version.
+
+</Step>
+
+<Step>
+
+### Edit
+
+Click a row to edit its input, expected answer and metadata, as text or JSON. Changes save as a new version shortly after you stop typing. Each row keeps a change history. **Delete case** also writes a new version.
+
+</Step>
+
+<Step>
+
+### Export
+
+**Export JSONL** downloads the selected version as benchmark JSONL. It loads with `load_benchmark` and has the same version hash, so runs on it pair with runs from the dashboard's data.
+
+</Step>
+
+</Steps>
+
+Pick an older version from the version list to view it read-only. If someone else changed the dataset while you edited, you are asked to load the newer version instead of merging.
+
+Tags are read from a list of strings under `metadata.tags`.
+
+<Callout type="warn">
+JSON numbers like `2.0` lose their `.0` in the browser, so a row holding such a float can hash differently in Python.
+</Callout>
+
+## Labelled from review
+
+Items from the [review queue](/dashboard/review) with their state (accepted, corrected, in review, not reviewed) and the answer a reviewer settled on. Accepted and corrected items are what training reads. **Train on N labelled** shows the `modelstill train run` command; training does not run in the browser.
+
+## API
+
+All under `/v1/tasks/{slug}/datasets`. See the [Datasets API](/api-reference/datasets). Edits and deletes name the version they were made against (`baseVersion`); a stale write gets `409` with the current head.

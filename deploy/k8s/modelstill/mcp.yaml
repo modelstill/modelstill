@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: { app: mcp }
+  template:
+    metadata:
+      labels: { app: mcp }
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      imagePullSecrets: [{ name: ghcr }]
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: mcp
+          image: modelstill-mcp
+          env:
+            - { name: PORT, value: "3104" }
+            - { name: NODE_ENV, value: production }
+            - { name: MODELSTILL_API_URL, value: "http://api:8787" }
+            - { name: PUBLIC_URL, value: "https://mcp.modelstill.com" }
+            - name: MODELSTILL_API_TOKEN
+              valueFrom:
+                secretKeyRef: { name: modelstill-env, key: MODELSTILL_API_TOKEN, optional: true }
+          ports:
+            - { name: http, containerPort: 3104 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 25m, memory: 96Mi }
+            limits: { memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp
+spec:
+  selector: { app: mcp }
+  ports:
+    - { name: http, port: 3104, targetPort: http }

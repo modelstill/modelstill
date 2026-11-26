@@ -1,0 +1,18 @@
+{
+  "title": "Dashboard",
+  "icon": "SquaresFour",
+  "pages": [
+    "tasks",
+    "evals",
+    "compare",
+    "review",
+    "datasets",
+    "gates",
+    "training",
+    "deployment",
+    "traffic",
+    "monitoring",
+    "api-keys",
+    "settings"
+  ]
+}

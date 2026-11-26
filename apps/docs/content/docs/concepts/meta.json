@@ -1,0 +1,9 @@
+{
+  "title": "How it works",
+  "icon": "TreeStructure",
+  "pages": [
+    "lifecycle",
+    "benchmarks-and-history",
+    "serving-modes"
+  ]
+}

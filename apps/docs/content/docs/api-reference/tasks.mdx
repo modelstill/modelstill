@@ -1,0 +1,20 @@
+---
+title: Tasks
+description: List, read and register tasks and their spec versions.
+icon: ListChecks
+full: true
+_openapi:
+  preload:
+    - ./openapi.json
+---
+
+export default function Layout(props) {
+  const { APIPage, OpenAPIPage } = props.components ?? {};
+  const Comp = OpenAPIPage ?? APIPage;
+  return (
+    <>
+      {props.children}
+      <Comp document="./openapi.json" operations={[{ path: "/v1/tasks", method: "get" }, { path: "/v1/tasks/{slug}", method: "get" }, { path: "/v1/tasks/{slug}", method: "put" }, { path: "/v1/tasks/{slug}/versions", method: "get" }]} />
+    </>
+  );
+}
