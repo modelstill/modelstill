@@ -25,6 +25,33 @@ export function CodeBlock({ title, children }: { title?: string; children: strin
   );
 }
 
+export function Table({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
+  return (
+    <div className="post-table">
+      <table>
+        <thead>
+          <tr>
+            {head.map((cell) => (
+              <th key={cell} scope="col">
+                {cell}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={index}>
+              {row.map((cell, column) => (
+                <td key={column}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function Note({ children }: { children: ReactNode }) {
   return (
     <aside className="post-note">

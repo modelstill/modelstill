@@ -262,6 +262,19 @@ body {
   margin-top: 0.8em;
 }
 
+.prose-post h3 {
+  margin-top: 1.7em;
+  font-size: 21px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.prose-post h3 + * {
+  margin-top: 0.6em;
+}
+
 .prose-post a {
   color: var(--ink);
   text-decoration: underline;
@@ -323,6 +336,39 @@ body {
   font-size: 13px;
   line-height: 1.6;
   color: #1f1f1f;
+}
+
+.post-table {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.post-table table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.post-table th,
+.post-table td {
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.post-table th {
+  border-bottom: 1px solid var(--line);
+  background: #fbfaf7;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.post-table tr + tr td {
+  border-top: 1px solid var(--line);
 }
 
 .post-note {

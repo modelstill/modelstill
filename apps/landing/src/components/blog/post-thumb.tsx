@@ -76,7 +76,44 @@ function Scales() {
   );
 }
 
-const MOTIFS: Record<Motif, () => React.JSX.Element> = { bars: Bars, intervals: Intervals, layers: Layers, scales: Scales };
+function Grid() {
+  const marks = [
+    [LEAF, LEAF, INK],
+    [LEAF, INK, LEAF],
+    [ACCENT, LEAF, LEAF],
+  ];
+  return (
+    <g>
+      <rect x="70" y="34" width="220" height="122" rx="10" fill="#ffffff" stroke={INK} strokeWidth="2" />
+      <line x1="70" x2="290" y1="62" y2="62" stroke={INK} strokeWidth="2" opacity="0.35" />
+      <line x1="84" x2="130" y1="48" y2="48" stroke={INK} strokeWidth="5" strokeLinecap="round" opacity="0.5" />
+      {marks.map((row, rowIndex) => {
+        const y = 84 + rowIndex * 26;
+        return (
+          <g key={y}>
+            <line x1="84" x2="140" y1={y} y2={y} stroke={INK} strokeWidth="5" strokeLinecap="round" opacity="0.25" />
+            {row.map((colour, column) => (
+              <circle key={column} cx={178 + column * 40} cy={y} r="7" fill={colour} opacity={colour === INK ? 0.25 : 1} />
+            ))}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+function Shield() {
+  return (
+    <g fill="none" stroke={INK} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M180 36l58 20v34c0 30-24 52-58 64-34-12-58-34-58-64V56z" fill="#ffffff" />
+      <path d="M180 54l40 14v24c0 21-16 37-40 46z" fill={LEAF} fillOpacity="0.35" stroke="none" />
+      <path d="M86 70l26 10M82 100h28M86 130l26-10" stroke={ACCENT} />
+      <path d="M274 70l-26 10M278 100h-28M274 130l-26-10" stroke={ACCENT} />
+    </g>
+  );
+}
+
+const MOTIFS: Record<Motif, () => React.JSX.Element> = { bars: Bars, intervals: Intervals, layers: Layers, scales: Scales, grid: Grid, shield: Shield };
 
 export function PostThumb({ post, className }: { post: Post; className?: string }) {
   const Drawing = MOTIFS[post.art.motif];
