@@ -34,6 +34,8 @@ model_list:
     model_info: { input_cost_per_token: 9.1e-8, output_cost_per_token: 1.82e-7 }
   - model_name: ticket-priority-cloud
     litellm_params: { model: <the cloud model the task used before> }
+  - model_name: ticket-priority-fallback
+    litellm_params: { model: <a second cloud model or provider> }
 router_settings:
   fallbacks:
     - ticket-priority: [ticket-priority-fallback]
@@ -43,7 +45,7 @@ litellm_settings:
     - { provider: modelstill, custom_handler: modelstill_handler.handler }
 ```
 
-The old cloud deployment moves to `<task>-cloud` unchanged. The plugin calls it through the proxy's own router, so retries, timeouts and provider keys stay in `config.yaml`. The task name keeps the cloud prices, so a student answer is priced at cloud prices: spend is overstated, never hidden.
+The old cloud deployment moves to `<task>-cloud` unchanged. `<task>-fallback` is a second cloud model, ideally from another provider; LiteLLM sends a call there only when the plugin or the cloud deployment fails. The plugin calls it through the proxy's own router, so retries, timeouts and provider keys stay in `config.yaml`. The task name keeps the cloud prices, so a student answer is priced at cloud prices: spend is overstated, never hidden.
 
 </Step>
 

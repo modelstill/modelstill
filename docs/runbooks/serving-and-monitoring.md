@@ -29,6 +29,8 @@ model_list:
     model_info: { input_cost_per_token: 9.1e-8, output_cost_per_token: 1.82e-7 }  # cloud prices
   - model_name: ticket-priority-cloud           # the old ticket-priority deployment, unchanged
     litellm_params: { model: openrouter/deepseek/deepseek-v4-flash, ... }
+  - model_name: ticket-priority-fallback        # a second cloud model, ideally another provider
+    litellm_params: { model: <second cloud model>, ... }
 router_settings:
   fallbacks:
     - ticket-priority: [ticket-priority-fallback]      # plugin or cloud failure
